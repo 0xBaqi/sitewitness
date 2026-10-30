@@ -41,6 +41,8 @@ export function InspectionForm({
             </div>
           )}
           <input
+            aria-label="Site photograph"
+            disabled={busy}
             type="file"
             accept="image/jpeg,image/png,image/webp"
             onChange={(e) => setPhoto(e.target.files?.[0] || null)}
@@ -54,6 +56,7 @@ export function InspectionForm({
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
             maxLength={500}
+            required
           />
         </label>
         <label>
@@ -67,7 +70,7 @@ export function InspectionForm({
             required
           />
         </label>
-        <button type="submit" disabled={busy || !photo || !access}>
+        <button type="submit" disabled={busy || !photo || !access || !question.trim()}>
           {busy ? "Analyzing photograph…" : "Analyze real photograph"}{" "}
           <span>↗</span>
         </button>

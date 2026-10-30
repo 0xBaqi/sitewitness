@@ -97,9 +97,27 @@ export default function Page() {
       setError("Could not save in this browser; export the report instead.");
     }
   };
+  function selectPhoto(file: File | null) {
+    setError("");
+    if (file && !["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+      setPhoto(null);
+      setError("Use JPEG, PNG, or WebP.");
+      return;
+    }
+    if (file && (file.size === 0 || file.size > 4 * 1024 * 1024)) {
+      setPhoto(null);
+      setError("Image must be between 1 byte and 4 MB.");
+      return;
+    }
+    setPhoto(file);
+  }
   async function analyze(e: React.FormEvent) {
     e.preventDefault();
-    if (!photo) return;
+    if (!photo || busy) return;
+    if (!question.trim()) {
+      setError("Enter an inspection question.");
+      return;
+    }
     setBusy(true);
     setError("");
     try {
@@ -200,7 +218,7 @@ export default function Page() {
           busy={busy}
           error={error}
           photo={photo}
-          setPhoto={setPhoto}
+          setPhoto={selectPhoto}
           analyze={analyze}
         />
         <section className="panel result">
