@@ -4,3 +4,6 @@ node_modules/
 !.env.example
 *.log
 *.tsbuildinfo
+
+/test-results/
+/playwright-report/
