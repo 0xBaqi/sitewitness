@@ -8,7 +8,15 @@ export default function Page(){
   const [access,setAccess]=useState('');const [busy,setBusy]=useState(false);const [error,setError]=useState('');const [result,setResult]=useState<Saved|null>(null);const [history,setHistory]=useState<Saved[]>([]);
   useEffect(()=>{try{const h=localStorage.getItem(key);if(h)setHistory(JSON.parse(h))}catch{}},[]);
   useEffect(()=>{if(!photo){setPreview('');return}const url=URL.createObjectURL(photo);setPreview(url);return()=>URL.revokeObjectURL(url)},[photo]);
-  const store=(items:Saved[])=>{setHistory(items);try{localStorage.setItem(key,JSON.stringify(items.slice(0,25)))}catch{setError('Could not save in this browser; export the report instead.')}};
+  const store=(items:Saved[])=>{
+    const updated=items.slice(0,25);
+    setHistory(updated);
+    try {
+      localStorage.setItem(key,JSON.stringify(updated));
+    } catch {
+      setError('Could not save in this browser; export the report instead.');
+    }
+  };
   async function analyze(e:React.FormEvent){e.preventDefault();if(!photo)return;setBusy(true);setError('');try{
     const data=new FormData();data.append('photo',photo);data.append('question',question);
     const response=await fetch('/api/analyze',{method:'POST',headers:{'x-sitewitness-access':access},body:data});const payload=await response.json();
