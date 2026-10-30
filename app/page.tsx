@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState, useRef } from "react";
-import type { Saved } from "../lib/inspection";
+import { savedSchema, type Saved } from "../lib/inspection";
+import { reportSchema } from "../lib/schema";
 import { savePhoto, loadPhoto } from "../lib/photos";
 import { FindingReview } from "./components/FindingReview";
 import { InspectionHistory } from "./components/InspectionHistory";
@@ -21,6 +22,7 @@ export default function Page() {
   const result = history.find((item) => item.id === activeId) ?? null;
   const [selected, setSelected] = useState(0);
   const [evidence, setEvidence] = useState("");
+  const [evidenceId, setEvidenceId] = useState<string | null>(null);
   const [imageStatus, setImageStatus] = useState("");
   useEffect(() => {
     try {
@@ -28,17 +30,14 @@ export default function Page() {
       if (raw) {
         const parsed: unknown = JSON.parse(raw);
         if (!Array.isArray(parsed)) throw new Error("Invalid history");
-        const items = parsed
-          .filter((item): item is Saved =>
-            Boolean(
-              item &&
-                typeof item.id === "string" &&
-                item.report &&
-                Array.isArray(item.report.findings) &&
-                item.reviews,
-            ),
-          )
+        const valid = parsed.map((item) => savedSchema.safeParse(item));
+        const items = valid
+          .flatMap((item) => (item.success ? [item.data] : []))
           .slice(0, 25);
+        if (valid.some((item) => !item.success))
+          setError(
+            "Some saved inspections were invalid and could not be loaded.",
+          );
         historyRef.current = items;
         setHistory(items);
         setActiveId(items[0]?.id ?? null);
@@ -63,6 +62,7 @@ export default function Page() {
         if (blob) {
           url = URL.createObjectURL(blob);
           setEvidence(url);
+          setEvidenceId(activeId);
           setImageStatus("");
         } else
           setImageStatus(
@@ -99,7 +99,10 @@ export default function Page() {
   };
   function selectPhoto(file: File | null) {
     setError("");
-    if (file && !["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+    if (
+      file &&
+      !["image/jpeg", "image/png", "image/webp"].includes(file.type)
+    ) {
       setPhoto(null);
       setError("Use JPEG, PNG, or WebP.");
       return;
@@ -118,6 +121,8 @@ export default function Page() {
       setError("Enter an inspection question.");
       return;
     }
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 55000);
     setBusy(true);
     setError("");
     try {
@@ -126,17 +131,31 @@ export default function Page() {
       data.append("question", question);
       const response = await fetch("/api/analyze", {
         method: "POST",
+        signal: controller.signal,
         headers: { "x-sitewitness-access": access },
         body: data,
       });
-      const payload = await response.json();
-      if (!response.ok) throw new Error(payload.error || "Analysis failed");
+      let payload;
+      try {
+        payload = await response.json();
+      } catch {
+        throw new Error(
+          "The server returned an unreadable response. Try again later.",
+        );
+      }
+
+      if (!response.ok)
+        throw new Error(
+          typeof payload?.error === "string"
+            ? payload.error
+            : "Analysis failed",
+        );
       const item: Saved = {
         id: crypto.randomUUID(),
         date: payload.timestamp,
         question,
         filename: photo.name,
-        report: payload.report,
+        report: reportSchema.parse(payload.report),
         reviews: {},
         edits: {},
         notes: {},
@@ -151,8 +170,15 @@ export default function Page() {
       store((items) => [item, ...items]);
       setActiveId(item.id);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Unexpected error");
+      setError(
+        controller.signal.aborted
+          ? "Analysis timed out. Try again later."
+          : e instanceof Error
+            ? e.message
+            : "Unexpected error",
+      );
     } finally {
+      clearTimeout(timeout);
       setBusy(false);
     }
   }
@@ -227,7 +253,7 @@ export default function Page() {
             <h2>Evidence review</h2>
           </div>
           {!result ? (
-            <div className="standby">
+            <div className="standby" role="status">
               <div className="radar">⌖</div>
               <h3>Awaiting an inspection</h3>
               <p>
@@ -247,15 +273,23 @@ export default function Page() {
               </div>
               <p className="summary">{result.report.overview}</p>
               <div className="evidence-photo">
-                {evidence ? (
+                {evidence && evidenceId === activeId ? (
                   <img
                     src={evidence}
                     alt={`Inspection photograph: ${result.filename}`}
                   />
                 ) : (
-                  <p className="muted">{imageStatus}</p>
+                  <p className="muted" role="status">
+                    {imageStatus}
+                  </p>
                 )}
               </div>
+              {result.report.findings.length === 0 && (
+                <p role="status">
+                  No findings returned. Review the overview and unanswered
+                  questions.
+                </p>
+              )}
               <nav className="finding-selector" aria-label="Select finding">
                 {result.report.findings.map((f, i) => (
                   <button

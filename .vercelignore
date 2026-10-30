@@ -1,0 +1,6 @@
+tests/
+test-results/
+playwright-report/
+playwright.config.ts
+docs/
+.env*

@@ -29,7 +29,7 @@ export function InspectionForm({
         <span className="num">01</span>
         <h2>New inspection</h2>
       </div>
-      <form onSubmit={analyze}>
+      <form onSubmit={analyze} aria-busy={busy}>
         <label className="upload">
           {preview ? (
             <img src={preview} alt="Selected inspection photograph" />
@@ -52,6 +52,7 @@ export function InspectionForm({
         <label>
           Inspection question
           <textarea
+            disabled={busy}
             rows={3}
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
@@ -62,6 +63,7 @@ export function InspectionForm({
         <label>
           Deployment access code
           <input
+            disabled={busy}
             type="password"
             value={access}
             onChange={(e) => setAccess(e.target.value)}
@@ -70,7 +72,10 @@ export function InspectionForm({
             required
           />
         </label>
-        <button type="submit" disabled={busy || !photo || !access || !question.trim()}>
+        <button
+          type="submit"
+          disabled={busy || !photo || !access || !question.trim()}
+        >
           {busy ? "Analyzing photograph…" : "Analyze real photograph"}{" "}
           <span>↗</span>
         </button>

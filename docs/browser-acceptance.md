@@ -63,3 +63,12 @@ The test emits `test-results/synthetic-review.png`; results and failure traces a
 Real Meta inference and the successful network-response-to-photo-write path were not exercised: fixtures seed storage directly. SAM is not integrated or simulated. Storage quota failures, blocked IndexedDB, corrupted history, concurrent tabs, and rapid asynchronous image-switch races remain separate coverage gaps. Refresh currently selects the newest report and its first finding; it does not restore the previously selected report/finding. JSON export contains report/review data, not photograph bytes. Browser storage remains profile/origin/device specific, and the 25-report cap does not prune older IndexedDB images.
 
 Gate B verification: `npm run typecheck`, `npm run build`, `npm run test:browser` (2 passed), `npm audit` (0 vulnerabilities), and `git diff --check` all passed.
+
+
+# Pre-inference hardening gate — 2026-10-30
+
+The original two Gate B tests remain unchanged and passed after backend/client hardening. Two additional browser tests passed: 375px mobile layout without horizontal overflow, keyboard finding selection, corrupt saved-history recovery, and busy/disabled controls followed by recovery from a stubbed non-JSON server error. The error stub exists only in the browser test; no model success was manufactured. Final run: 4 passed (33.9 seconds). Initial new-test failures were ambiguous alert selectors matching Next.js's route announcer; scoping assertions to the inspection form resolved them.
+
+Backend suite: 31 deterministic tests passed, covering missing credentials, disabled inference, invalid access/origin, malformed multipart, streaming byte bounds without content-length, empty/oversize/truncated/mismatched image inputs, duplicate fields, question limits, decoded JPEG delivery, instance quotas/reset/spoofed-IP resistance, synthetic model parsing, malformed/incomplete/oversize responses, upstream errors, request/body timeouts, and duplicate finding IDs. No external inference HTTP was permitted.
+
+Production build and TypeScript passed. See production-readiness.md for deployment controls and remaining production blockers; evaluation-plan.md contains planned real-photo cases and metrics, with no fabricated results.
