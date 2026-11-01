@@ -316,3 +316,14 @@ test("SYNTHETIC TEST DATA: loading and non-JSON server failure recover accessibl
     page.getByText("No reports yet.", { exact: true }),
   ).toBeVisible();
 });
+
+
+test("preview server keeps inference and server persistence disabled", async ({ request }) => {
+  // Local production server only; no photograph, key, or model request.
+  for (const path of ["/api/analyze", "/api/inspections"]) {
+    const response = await request.post(path, {data: {}});
+    expect(response.status()).toBe(503);
+    expect(response.headers()["cache-control"]).toBe("no-store");
+    expect((await response.json()).error).toContain("disabled");
+  }
+});

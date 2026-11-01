@@ -7,3 +7,7 @@ node_modules/
 
 /test-results/
 /playwright-report/
+
+# Private local persistence must never be committed
+*.sqlite*
+.sitewitness-data/

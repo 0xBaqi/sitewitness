@@ -17,6 +17,6 @@ export default defineConfig({
     reuseExistingServer: false,
     timeout: 120000,
     // No real credentials are inherited by the acceptance server.
-    env: { MODEL_API_KEY: "", SITEWITNESS_ACCESS_CODE: "" },
+    env: { MODEL_API_KEY: "", SITEWITNESS_ACCESS_CODE: "", INFERENCE_ENABLED: "false", INSPECTION_STORAGE_ENABLED: "false", SITEWITNESS_STORAGE_KEY: "", SITEWITNESS_USERS: "", SITEWITNESS_DATA_DIR: "" },
   },
 });

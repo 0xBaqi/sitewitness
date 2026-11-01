@@ -1,9 +1,21 @@
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { after } from "node:test";
+import { LocalStore } from "../lib/server/store";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import sharp from "sharp";
-import { createAnalyzeHandler } from "../lib/server/analyze";
+import { createAnalyzeHandler as productionHandler } from "../lib/server/analyze";
 import { createMetaAdapter } from "../lib/server/meta";
 import { ServiceError } from "../lib/server/errors";
+const directories: string[] = [];
+after(() => directories.forEach(path => rmSync(path, {recursive:true, force:true})));
+function createAnalyzeHandler(options: Parameters<typeof productionHandler>[0] = {}) {
+  const dir = mkdtempSync(join(tmpdir(), "sitewitness-backend-"));
+  directories.push(dir);
+  return productionHandler({inferenceAuthorized:true, store:()=>new LocalStore(join(dir,"test.sqlite")), ...options});
+}
 // SYNTHETIC TEST DATA. All HTTP is stubbed; nothing here is model inference.
 globalThis.fetch = async () => {
   throw new Error("External HTTP forbidden in backend tests");
@@ -12,6 +24,7 @@ const env = () => ({
   MODEL_API_KEY: "SYNTHETIC_TEST_KEY",
   SITEWITNESS_ACCESS_CODE: "SYNTHETIC_TEST_ACCESS",
   INFERENCE_ENABLED: "true",
+  INFERENCE_CALL_LIMIT: "100",
 });
 const report = {
   overview: "SYNTHETIC TEST DATA",
@@ -244,4 +257,28 @@ test("duplicate finding IDs are rejected", async () => {
       }),
     )(input),
   );
+});
+
+test("production handler remains locked even with enabled environment", async () => {
+  let called=false;
+  const response=await productionHandler({env,infer:async()=>{called=true;return report;}})(await upload());
+  assert.equal(response.status,503);
+  assert.equal(called,false);
+});
+test("zero budget blocks adapter and upstream failures consume reservations", async () => {
+  let calls=0;
+  const post=createAnalyzeHandler({env:()=>({...env(),INFERENCE_CALL_LIMIT:"1"}),infer:async()=>{calls++;throw new Error("failure");}});
+  assert.equal((await post(await upload())).status,500);
+  assert.equal((await post(await upload())).status,429);
+  assert.equal(calls,1);
+  const zero=createAnalyzeHandler({env:()=>({...env(),INFERENCE_CALL_LIMIT:"0"}),infer:async()=>{throw new Error("must not run");}});
+  assert.equal((await zero(await upload())).status,429);
+});
+
+
+test("unavailable durable storage prevents all inference", async () => {
+  let called=false;
+  const post=createAnalyzeHandler({env,store:()=>{throw new Error("storage unavailable");},infer:async()=>{called=true;return report;}});
+  assert.equal((await post(await upload())).status,500);
+  assert.equal(called,false);
 });

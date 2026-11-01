@@ -1,3 +1,4 @@
+import { LocalStore, openLocalStore } from "./store";
 import { createHash, timingSafeEqual } from "node:crypto";
 import sharp from "sharp";
 import { createMetaAdapter, type Inference } from "./meta";
@@ -8,34 +9,20 @@ type Environment = {
   MODEL_API_KEY?: string;
   SITEWITNESS_ACCESS_CODE?: string;
   INFERENCE_ENABLED?: string;
+  INFERENCE_CALL_LIMIT?: string;
 };
 export function createAnalyzeHandler(
   options: {
     env?: () => Environment;
     infer?: Inference;
     now?: () => number;
+    store?: () => LocalStore;
+    inferenceAuthorized?: boolean;
   } = {},
 ) {
   const env = options.env ?? (() => process.env);
   const infer = options.infer ?? createMetaAdapter();
   const now = options.now ?? Date.now;
-  // Shared-code, per-instance limits: deliberately ignore caller-supplied IP headers.
-  let attempts = { count: 0, until: 0 };
-  let analyses = { count: 0, until: 0 };
-  const quota = (bucket: typeof attempts, max: number, window: number) => {
-    const time = now();
-    if (time >= bucket.until) {
-      bucket.count = 0;
-      bucket.until = time + window;
-    }
-    if (bucket.count >= max)
-      throw new ServiceError(
-        429,
-        "Local request limit reached. Try later.",
-        Math.max(1, Math.ceil((bucket.until - time) / 1000)),
-      );
-    bucket.count++;
-  };
   const json = (body: unknown, status = 200, retryAfter?: number) =>
     Response.json(body, {
       status,
@@ -46,8 +33,12 @@ export function createAnalyzeHandler(
       },
     });
   return async (request: Request): Promise<Response> => {
+    let store: LocalStore | undefined;
     try {
       const config = env();
+      // This milestone has no authorized live inference path. Environment alone cannot unlock it.
+      if (options.inferenceAuthorized !== true)
+        throw new ServiceError(503, "Analysis is disabled pending operator authorization.");
       if (
         !config.MODEL_API_KEY?.trim() ||
         !config.SITEWITNESS_ACCESS_CODE?.trim()
@@ -63,7 +54,8 @@ export function createAnalyzeHandler(
         throw new ServiceError(403, "Invalid request origin.");
       if (request.headers.get("sec-fetch-site") === "cross-site")
         throw new ServiceError(403, "Invalid request origin.");
-      quota(attempts, 60, 60000);
+      store = options.store?.() ?? openLocalStore();
+      store.consume("analysis-attempts", 60, 60000, now());
       const supplied = request.headers.get("x-sitewitness-access") ?? "";
       const digest = (text: string) =>
         createHash("sha256").update(text).digest();
@@ -130,7 +122,7 @@ export function createAnalyzeHandler(
       if (!formats[photo.type])
         throw new ServiceError(415, "Use JPEG, PNG, or WebP.");
       // Charge authenticated attempts before expensive decode, including malformed images.
-      quota(analyses, 10, 3600000);
+      store.consume("analysis-decodes", 10, 3600000, now());
       let image: Uint8Array;
       try {
         const bytes = Buffer.from(await photo.arrayBuffer());
@@ -154,6 +146,9 @@ export function createAnalyzeHandler(
           "Photograph could not be decoded. Use a non-animated JPEG, PNG, or WebP under 24 megapixels.",
         );
       }
+      const limit = config.INFERENCE_CALL_LIMIT ?? "0";
+      if (!/^(0|[1-9][0-9]{0,5})$/.test(limit)) throw new ServiceError(503, "Inference budget is not configured.");
+      store.reserve(Number(limit), now());
       const report = await infer({
         image,
         question: question.trim(),
@@ -171,6 +166,6 @@ export function createAnalyzeHandler(
         { error: "Analysis could not be completed. Try again later." },
         500,
       );
-    }
+    } finally { store?.close(); }
   };
 }

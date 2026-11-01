@@ -1,4 +1,4 @@
-# SiteWitness v0.3 — pre-inference readiness
+# SiteWitness v0.4 — local durable controls
 
 A browser-local construction-photo review workspace with a server-side Meta adapter. Synthetic browser and backend tests pass; real Meta access, billing, inference quality and deployment have NOT been verified. No SAM masks or spatial annotations are implemented.
 
@@ -12,7 +12,7 @@ cp .env.example .env.local
 npm run dev
 ```
 
-Keep `INFERENCE_ENABLED=false`. The workspace can load existing browser-local reports without inference. Set `MODEL_API_KEY` and `SITEWITNESS_ACCESS_CODE` only in local/server environments, never `NEXT_PUBLIC_`. Enable inference only after explicit authorization for a controlled paid test; see the readiness guide before changing this flag.
+Keep `INFERENCE_ENABLED=false`. The workspace can load existing browser-local reports without inference. Set `MODEL_API_KEY` and `SITEWITNESS_ACCESS_CODE` only in local/server environments, never `NEXT_PUBLIC_`. The live route is also locked in code for this milestone; changing the flag cannot unlock it. Any future live-inference change requires explicit authorization and review.
 
 ## Verification without external inference
 
@@ -38,9 +38,10 @@ Browser tests use fresh contexts on localhost:3107 and clearly labelled SYNTHETI
 
 ## Deployment status
 
-Vercel configuration is prepared only; nothing has been deployed. Inference is disabled by default. Public production remains blocked on durable abuse/budget controls, per-user access, privacy/retention policy, and authorized real-photo evaluation. Process-local rate limits and a shared code are not sufficient public-production controls.
+Vercel configuration is prepared only; nothing has been deployed. Inference is disabled by default. Public production remains blocked on durable abuse/budget controls, per-user access, privacy/retention policy, and authorized real-photo evaluation. SQLite now provides durable single-host rate/call reservations and an optional encrypted, per-user inspection API. This storage is rejected on Vercel; preview APIs remain disabled. Browser history is not automatically synchronized. The call allowance is not a monetary budget, and the analysis shared code remains a controlled-trial limitation.
 
-- [Production readiness and server environment variables](docs/production-readiness.md)
+- [v0.4 configuration, verification, and limitations](docs/v0.4-readiness.md)
+- [Historical v0.3 production readiness and server environment variables](docs/production-readiness.md)
 - [Verified browser/backend acceptance evidence](docs/browser-acceptance.md)
 - [Real-photograph evaluation plan — no results yet](docs/evaluation-plan.md)
 
