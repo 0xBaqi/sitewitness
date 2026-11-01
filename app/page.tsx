@@ -132,6 +132,7 @@ export default function Page() {
           reviewable inspection record — no AI access required.
         </p>
       </section>
+      <p><a href="/vault">Private server snapshots</a> · Create → photograph → record observations → review → save → export.</p>
       <ManualWorkspace legacyError={error} />
       <section hidden={!history.length && !error} aria-label="Previous inspections">
       <div className="legacy-workspace">

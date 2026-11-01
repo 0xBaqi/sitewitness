@@ -48,6 +48,9 @@ export class LocalStore {
     const data = Buffer.concat([iv, cipher.getAuthTag(), ciphertext]).toString("base64");
     this.transaction(() => {
       this.db.prepare("DELETE FROM inspections WHERE expires<=?").run(now);
+      const usage=this.db.prepare("SELECT COALESCE(SUM(length(data)),0) AS n FROM inspections").get() as {n:number};
+      const ownUsage=this.db.prepare("SELECT COALESCE(SUM(length(data)),0) AS n FROM inspections WHERE owner=?").get(owner) as {n:number};
+      if(usage.n+data.length>128*1024*1024 || ownUsage.n+data.length>40*1024*1024) throw new ServiceError(429,"Photograph storage quota reached. Export and delete older snapshots.");
       const total = this.db.prepare("SELECT COUNT(*) AS n FROM inspections").get() as {n:number};
       const user = this.db.prepare("SELECT COUNT(*) AS n FROM inspections WHERE owner=?").get(owner) as {n:number};
       if (total.n >= 1000 || user.n >= 100) throw new ServiceError(429, "Inspection storage limit reached. Delete older records.");

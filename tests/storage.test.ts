@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync, statSync, symlinkSync } from "node:fs";
+import { copyFileSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
@@ -173,4 +173,43 @@ test("legacy encrypted records retain unknown origin and revoked users lose acce
     assert.equal((await handle(s.request())).status,401);
     assert.deepEqual((await (await handle(s.request("GET",tokenB))).json()).inspections,[]);
   } finally{s.clean();}
+});
+
+test("authenticated archives retain photos, reject forgery, isolate users and delete",async()=>{
+ const s=setup();
+ try {
+ const {newManualInspection}=await import("../lib/inspection");
+ const sharp=(await import("sharp")).default;
+ const bytes=await sharp({create:{width:2,height:2,channels:3,background:"red"}}).png().toBuffer();
+ const inspection=newManualInspection();inspection.question="Synthetic snapshot";
+ inspection.photos=[{id:crypto.randomUUID(),name:"test.png",type:"image/png",size:bytes.length}];
+ const archive={format:"sitewitness-manual-v1",provenance:{kind:"manual"},inspection,photographs:[{id:inspection.photos[0].id,dataUrl:`data:image/png;base64,${bytes.toString("base64")}`}]};
+ const handle=createInspectionHandler({archives:true,env:()=>s.env,store:s.store});
+ const response=await handle(s.request("POST",tokenA,archive));assert.equal(response.status,201);const {id}=await response.json();
+ assert.equal(readFileSync(s.path).includes(Buffer.from("Synthetic snapshot")),false);
+ assert.deepEqual((await (await handle(s.request("GET",tokenB))).json()).inspections,[]);
+ await handle(s.request("DELETE",tokenB,undefined,`?id=${id}`));
+ const rows=(await (await handle(s.request())).json()).inspections;assert.equal(rows[0].record.photographs[0].dataUrl,archive.photographs[0].dataUrl);
+ assert.equal((await handle(s.request("POST",tokenA,{...archive,provenance:{kind:"ai"}}))).status,400);
+ assert.equal((await handle(s.request("POST",tokenA,{...archive,photographs:[]}))).status,400);
+ await handle(s.request("DELETE",tokenA,undefined,`?id=${id}`));assert.deepEqual((await (await handle(s.request())).json()).inspections,[]);
+ }finally{s.clean();}
+});
+
+test("offline encrypted backup restores records and retention; wrong key fails",()=>{
+ const s=setup();try{let db=s.store();db.save("alice","backup-record",record,100);db.close();
+ const backup=join(s.dir,"backup.sqlite");copyFileSync(s.path,backup);
+ db=s.store();db.remove("alice","backup-record");db.close();
+ const restored=new LocalStore(backup,key);assert.equal((restored.list("alice",101)[0].record as typeof record).question,record.question);assert.deepEqual(restored.list("bob",101),[]);restored.close();
+ const wrong=new LocalStore(backup,Buffer.alloc(32,1));assert.throws(()=>wrong.list("alice",101));wrong.close();
+ const expired=new LocalStore(backup,key);assert.deepEqual(expired.list("alice",100+7*86400000),[]);expired.close();
+ }finally{s.clean();}
+});
+
+test("configured public origin works behind a proxy and rejects other origins",async()=>{
+ const s=setup();try{const handle=createInspectionHandler({env:()=>({...s.env,SITEWITNESS_PUBLIC_ORIGIN:"https://inspection.example"}),store:s.store});
+ assert.equal((await handle(s.request("POST",tokenA,record))).status,403);
+ const req=new Request("http://internal/api/inspections",{method:"POST",headers:{origin:"https://inspection.example",authorization:`Bearer ${tokenA}`,"content-type":"application/json"},body:JSON.stringify(record)});
+ assert.equal((await handle(req)).status,201);
+ }finally{s.clean();}
 });

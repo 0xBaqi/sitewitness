@@ -1,4 +1,5 @@
 import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
+import { validateArchive } from "./archive";
 import { z } from "zod";
 import { manualServerRecordSchema as recordSchema, manualNotice } from "../inspection";
 import { readBounded, ServiceError } from "./errors";
@@ -11,7 +12,7 @@ const usersSchema = z.array(z.object({
   new Set(users.map(u=>u.id)).size===users.length && new Set(users.map(u=>u.tokenHash)).size===users.length);
 
 export function createInspectionHandler(options: {
-  env?: () => Record<string, string | undefined>; store?: () => LocalStore; now?: () => number;
+  archives?: boolean; env?: () => Record<string, string | undefined>; store?: () => LocalStore; now?: () => number;
 } = {}) {
   return async (request: Request) => {
     let store: LocalStore | undefined;
@@ -23,7 +24,11 @@ export function createInspectionHandler(options: {
       const env = options.env?.() ?? process.env;
       if (env.VERCEL || env.INSPECTION_STORAGE_ENABLED !== "true") throw new ServiceError(503,"Server inspection storage is disabled.");
       const origin = request.headers.get("origin");
-      if ((origin && origin !== new URL(request.url).origin) || request.headers.get("sec-fetch-site")==="cross-site")
+      // Explicit public origin is required when a reverse proxy/Next changes the request URL.
+      const expectedOrigin = env.SITEWITNESS_PUBLIC_ORIGIN ?? new URL(request.url).origin;
+      try { if(new URL(expectedOrigin).origin!==expectedOrigin) throw new Error(); }
+      catch { throw new ServiceError(503,"Invalid public origin configuration."); }
+      if ((origin && origin !== expectedOrigin) || request.headers.get("sec-fetch-site")==="cross-site")
         throw new ServiceError(403,"Invalid request origin.");
       let users: z.infer<typeof usersSchema>;
       try { users=usersSchema.parse(JSON.parse(env.SITEWITNESS_USERS ?? "")); }
@@ -48,10 +53,11 @@ export function createInspectionHandler(options: {
       }
       if (request.method !== "POST") throw new ServiceError(405,"Method not supported.");
       if (request.headers.get("content-type")?.split(";")[0].trim()!=="application/json") throw new ServiceError(415,"Send a JSON inspection record.");
-      const bytes = await readBounded(request.body,32768,AbortSignal.timeout(10000));
-      let record: z.infer<typeof recordSchema>;
-      try { record=recordSchema.parse(JSON.parse(new TextDecoder().decode(bytes)));
-        record.report.notice=manualNotice; }
+      const bytes = await readBounded(request.body,options.archives ? 28*1024*1024 : 32768,AbortSignal.timeout(10000));
+      let record: unknown;
+      try { const input=JSON.parse(new TextDecoder().decode(bytes));
+        if(options.archives) record=await validateArchive(input);
+        else { const parsed=recordSchema.parse(input); parsed.report.notice=manualNotice; record=parsed; } }
       catch { throw new ServiceError(400,"Invalid inspection record."); }
       const id = randomUUID();
       const expires=store.save(user.id,id,record,now);
