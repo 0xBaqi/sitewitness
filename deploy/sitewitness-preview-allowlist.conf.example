@@ -1,0 +1,6 @@
+# Copy to /etc/nginx/sitewitness-preview-allowlist.conf (root owned).
+# Add only approved tester public IPs ABOVE deny all, e.g.:
+# allow 192.0.2.10/32;  # documentation example only; replace before use
+# This is a network gate, not personal identity. Bearer tokens still protect data.
+# No allow all, broad mobile-carrier networks, trusted forwarded-IP headers or CDN.
+deny all;

@@ -5,6 +5,15 @@ server {
     server_name inspections.example.invalid;
     ssl_certificate /etc/ssl/sitewitness/fullchain.pem;
     ssl_certificate_key /etc/ssl/sitewitness/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    server_tokens off;
+    # Required file; absent file fails nginx validation. Default contents deny all.
+    # Direct DNS to this host only: do not put a CDN/proxy in front of this ACL.
+    include /etc/nginx/sitewitness-preview-allowlist.conf;
+    add_header X-Robots-Tag "noindex, nofollow, noarchive" always;
+    add_header Referrer-Policy "no-referrer" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "DENY" always;
     client_max_body_size 28m;
     client_body_timeout 15s;
     client_header_timeout 15s;
