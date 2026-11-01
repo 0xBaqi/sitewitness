@@ -8,10 +8,12 @@
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "test:browser": "playwright test",
-    "test:backend": "tsx --test tests/backend.test.ts tests/storage.test.ts",
+    "test:backend": "tsx --test tests/backend.test.ts tests/storage.test.ts tests/recovery.test.ts",
     "storage:expire": "tsx scripts/expire.ts",
     "test:vault": "playwright test --config playwright.vault.config.ts",
-    "test:smoke": "tsx --test tests/deployment.test.ts"
+    "test:smoke": "tsx --test tests/deployment.test.ts",
+    "storage:recover": "tsx scripts/recover.ts",
+    "test:recovery": "tsx --test tests/recovery.test.ts"
   },
   "dependencies": {
     "next": "^15.5.0",
