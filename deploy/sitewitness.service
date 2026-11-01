@@ -1,0 +1,28 @@
+[Unit]
+Description=SiteWitness private inspection pilot
+After=network.target
+RequiresMountsFor=/var/lib/sitewitness
+
+[Service]
+User=sitewitness
+Group=sitewitness
+WorkingDirectory=/opt/sitewitness/current
+EnvironmentFile=/etc/sitewitness/sitewitness.env
+Environment=NODE_ENV=production
+Environment=INFERENCE_ENABLED=false
+Environment=MODEL_API_KEY=
+Environment=SITEWITNESS_ACCESS_CODE=
+Environment=NEXT_TELEMETRY_DISABLED=1
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/sitewitness /opt/sitewitness/current/.next/cache
+ExecStart=/usr/bin/env INFERENCE_ENABLED=false MODEL_API_KEY= SITEWITNESS_ACCESS_CODE= /opt/node24/bin/node node_modules/next/dist/bin/next start --hostname 127.0.0.1 --port 3000
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target

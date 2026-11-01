@@ -1,0 +1,26 @@
+# Include within nginx http context. Replace hostname and certificate paths.
+limit_req_zone $binary_remote_addr zone=sitewitness:10m rate=30r/m;
+server {
+    listen 443 ssl;
+    server_name inspections.example.invalid;
+    ssl_certificate /etc/ssl/sitewitness/fullchain.pem;
+    ssl_certificate_key /etc/ssl/sitewitness/privkey.pem;
+    client_max_body_size 28m;
+    client_body_timeout 15s;
+    client_header_timeout 15s;
+    access_log off;
+    location / {
+        limit_req zone=sitewitness burst=20 nodelay;
+        limit_req_status 429;
+        proxy_pass http://127.0.0.1:3000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_read_timeout 60s;
+        proxy_cache off;
+        proxy_buffering off;
+        # Avoid writing private upload/response content into proxy temporary files.
+        proxy_request_buffering off;
+        proxy_max_temp_file_size 0;
+    }
+}

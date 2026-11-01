@@ -213,3 +213,12 @@ test("configured public origin works behind a proxy and rejects other origins",a
  assert.equal((await handle(req)).status,201);
  }finally{s.clean();}
 });
+
+
+test("idle cleanup respects exact seven-day boundary and survives restart",()=>{
+ const s=setup();try{let db=s.store();db.save("alice","expiring",record,100);db.save("bob","later",record,101);
+ assert.equal(db.purgeExpired(100+7*86400000-1),0);
+ assert.throws(()=>db.purgeExpired(NaN));assert.equal(db.purgeExpired(100+7*86400000),1);db.close();
+ db=s.store();assert.deepEqual(db.list("alice",100+7*86400000),[]);assert.equal(db.list("bob",100+7*86400000).length,1);db.close();
+ }finally{s.clean();}
+});

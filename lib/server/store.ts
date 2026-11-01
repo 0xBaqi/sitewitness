@@ -16,6 +16,10 @@ export class LocalStore {
       CREATE INDEX IF NOT EXISTS inspections_owner ON inspections(owner);`);
   }
   close() { this.db.close(); }
+  purgeExpired(now: number) {
+    if (!Number.isSafeInteger(now) || now < 0) throw new Error("Invalid cleanup time");
+    return Number(this.db.prepare("DELETE FROM inspections WHERE expires<=?").run(now).changes);
+  }
   private transaction<T>(fn: () => T): T {
     this.db.exec("BEGIN IMMEDIATE");
     try { const result = fn(); this.db.exec("COMMIT"); return result; }

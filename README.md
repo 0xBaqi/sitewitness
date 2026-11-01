@@ -39,3 +39,7 @@ Browser tests require an installed Playwright Chromium browser and its system li
 [v0.5 workflow, architecture assessment, and production blockers](docs/v0.5-readiness.md) · [Historical v0.4 controls](docs/v0.4-readiness.md) · [Evaluation plan](docs/evaluation-plan.md)
 
 No SAM masks, live model results, deployment, or cross-device sync are claimed. Human observations and review decisions are not engineering certifications.
+
+## Deployment readiness (v0.7)
+
+See [the single-host deployment runbook](docs/v0.7-deployment-runbook.md) and reviewed templates in `deploy/`. Nothing is deployed by these files. Run `npm run test:smoke` after building to verify production restart/storage behavior locally. `npm run storage:expire` purges expired snapshots; a five-minute systemd timer template is included. HTTPS, host verification, off-site backup/deletion reconciliation and operator recovery remain launch gates.
