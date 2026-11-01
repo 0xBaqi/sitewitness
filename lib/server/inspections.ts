@@ -1,13 +1,9 @@
 import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
-import { reportSchema } from "../schema";
+import { manualServerRecordSchema as recordSchema, manualNotice } from "../inspection";
 import { readBounded, ServiceError } from "./errors";
 import { LocalStore, openLocalStore } from "./store";
 
-const recordSchema = z.object({
-  question: z.string().trim().min(1).max(500),
-  report: reportSchema,
-}).strict();
 const usersSchema = z.array(z.object({
   id: z.string().regex(/^[a-zA-Z0-9_-]{1,64}$/),
   tokenHash: z.string().regex(/^[a-f0-9]{64}$/),
@@ -41,7 +37,9 @@ export function createInspectionHandler(options: {
       const hash = createHash("sha256").update(token.slice(7)).digest();
       const user = users.find(u=>timingSafeEqual(hash,Buffer.from(u.tokenHash,"hex")));
       if (!user) throw new ServiceError(401,"Invalid inspection credentials.");
-      if (request.method === "GET") return reply({inspections:store.list(user.id,now)});
+      if (request.method === "GET") return reply({inspections:store.list(user.id,now).map(item=>({
+        ...item, record:{...(item.record as object), provenance:(item.record as {provenance?:unknown}).provenance ?? {kind:"legacy_unknown"}},
+      }))});
       if (request.method === "DELETE") {
         const id = new URL(request.url).searchParams.get("id");
         if (!id || !z.string().uuid().safeParse(id).success) throw new ServiceError(400,"Invalid inspection ID.");
@@ -52,7 +50,8 @@ export function createInspectionHandler(options: {
       if (request.headers.get("content-type")?.split(";")[0].trim()!=="application/json") throw new ServiceError(415,"Send a JSON inspection record.");
       const bytes = await readBounded(request.body,32768,AbortSignal.timeout(10000));
       let record: z.infer<typeof recordSchema>;
-      try { record=recordSchema.parse(JSON.parse(new TextDecoder().decode(bytes))); }
+      try { record=recordSchema.parse(JSON.parse(new TextDecoder().decode(bytes)));
+        record.report.notice=manualNotice; }
       catch { throw new ServiceError(400,"Invalid inspection record."); }
       const id = randomUUID();
       const expires=store.save(user.id,id,record,now);

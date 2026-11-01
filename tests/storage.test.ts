@@ -13,7 +13,7 @@ import { ServiceError } from "../lib/server/errors";
 globalThis.fetch = async () => { throw new Error("External HTTP forbidden"); };
 const key = Buffer.alloc(32, 42);
 const tokenA = "a".repeat(43), tokenB = "b".repeat(43);
-const record = {question:"SYNTHETIC PRIVATE RECORD",report:{overview:"SYNTHETIC TEST DATA", findings:[], unanswered_questions:[], notice:"test"}};
+const record = {provenance:{kind:"manual"},question:"SYNTHETIC PRIVATE RECORD",report:{overview:"SYNTHETIC TEST DATA", findings:[], unanswered_questions:[], notice:"test"}};
 function setup() {
   const dir = mkdtempSync(join(tmpdir(), "sitewitness-storage-"));
   const path = join(dir,"test.sqlite");
@@ -139,4 +139,38 @@ test("configured disk store restricts permissions and rejects unsafe paths", () 
     const link=join(s.dir,"link"); symlinkSync(s.dir,link);
     assert.throws(()=>openLocalStore({...env,SITEWITNESS_DATA_DIR:link}),ServiceError);
   } finally {s.clean();}
+});
+
+
+test("public persistence cannot forge AI provenance and restores human review metadata",async()=>{
+  const s=setup();
+  try {
+    const handle=createInspectionHandler({env:()=>s.env,store:s.store});
+    for(const provenance of [undefined,{kind:"ai",model:"claimed-model"},{kind:"legacy_unknown"},{kind:"manual",model:"claimed-model"}]) {
+      assert.equal((await handle(s.request("POST",tokenA,{...record,provenance}))).status,400);
+    }
+    const human={...record,report:{...record.report,findings:[{id:"human-1",category:"observation",title:"Human observation",description:"Human description",evidence:"Visible",limitation:"Unverified"}]},reviews:{"human-1":"investigate"},notes:{"human-1":"Revisit"},inspectionNotes:"Human notes"};
+    assert.equal((await handle(s.request("POST",tokenA,human))).status,201);
+    const restored=(await (await handle(s.request())).json()).inspections[0].record;
+    assert.deepEqual(restored.provenance,{kind:"manual"});
+    assert.equal(restored.reviews["human-1"],"investigate");
+    assert.equal(restored.notes["human-1"],"Revisit");
+    assert.equal(restored.inspectionNotes,"Human notes");
+    assert.match(restored.report.notice,/No AI analysis was performed/);
+    assert.equal((await handle(s.request("POST",tokenA,{...human,notes:{"other-record":"injected"}}))).status,400);
+  } finally{s.clean();}
+});
+
+test("legacy encrypted records retain unknown origin and revoked users lose access",async()=>{
+  const s=setup();
+  try {
+    const {provenance,...legacy}=record;
+    const db=s.store();db.save("alice","legacy",legacy,Date.now());db.close();
+    const handle=createInspectionHandler({env:()=>s.env,store:s.store});
+    assert.deepEqual((await (await handle(s.request())).json()).inspections[0].record.provenance,{kind:"legacy_unknown"});
+    const remaining=JSON.parse(s.env.SITEWITNESS_USERS).filter((u:{id:string})=>u.id!=="alice");
+    s.env.SITEWITNESS_USERS=JSON.stringify(remaining);
+    assert.equal((await handle(s.request())).status,401);
+    assert.deepEqual((await (await handle(s.request("GET",tokenB))).json()).inspections,[]);
+  } finally{s.clean();}
 });

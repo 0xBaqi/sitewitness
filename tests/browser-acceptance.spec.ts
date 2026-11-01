@@ -5,6 +5,7 @@ import type { Saved } from "../lib/inspection";
 const marker = "SYNTHETIC TEST DATA";
 const reports: Saved[] = ["A", "B"].map((letter, index) => ({
   id: `synthetic-${letter}`,
+  provenance: {kind:"legacy_unknown"},
   date: `2026-10-${30 - index}T10:00:00.000Z`,
   question: `${marker}: storage acceptance only`,
   filename: `${marker}-${letter}.png`,
@@ -269,54 +270,16 @@ test("SYNTHETIC TEST DATA: mobile layout, keyboard controls and corrupt history"
   ).toBeVisible();
 });
 
-test("SYNTHETIC TEST DATA: loading and non-JSON server failure recover accessibly", async ({
-  page,
-}) => {
+test("AI unavailable state offers manual creation without sending an analysis request", async ({page}) => {
+  let analysisRequests=0;
+  page.on("request",req=>{if(new URL(req.url()).pathname==="/api/analyze")analysisRequests++;});
   await page.goto("/");
-  await page
-    .getByLabel("Site photograph")
-    .setInputFiles({
-      name: "SYNTHETIC TEST DATA.png",
-      mimeType: "image/png",
-      buffer: Buffer.from(
-        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=",
-        "base64",
-      ),
-    });
-  await page.getByLabel("Deployment access code").fill("SYNTHETIC_TEST_ACCESS");
-  let release!: () => void;
-  const held = new Promise<void>((resolve) => {
-    release = resolve;
-  });
-  // Stub only a server error, never a model result. This route never leaves the browser.
-  await page.route("**/api/analyze", async (route) => {
-    await held;
-    await route.fulfill({
-      status: 502,
-      contentType: "text/html",
-      body: "SYNTHETIC TEST DATA: gateway failure",
-    });
-  });
-  await page
-    .getByRole("button", { name: "Analyze real photograph ↗" })
-    .click();
-  await expect(
-    page.getByRole("button", { name: "Analyzing photograph… ↗" }),
-  ).toBeDisabled();
-  await expect(page.getByLabel("Site photograph")).toBeDisabled();
-  await expect(page.locator("form")).toHaveAttribute("aria-busy", "true");
-  release();
-  await expect(page.locator("form").getByRole("alert")).toContainText(
-    "unreadable response",
-  );
-  await expect(
-    page.getByRole("button", { name: "Analyze real photograph ↗" }),
-  ).toBeEnabled();
-  await expect(
-    page.getByText("No reports yet.", { exact: true }),
-  ).toBeVisible();
+  await expect(page.getByText("AI analysis is unavailable.",{exact:true})).toBeVisible();
+  await expect(page.getByRole("button",{name:"New manual inspection"})).toBeEnabled();
+  await page.getByRole("button",{name:"New manual inspection"}).click();
+  await expect(page.getByLabel("Inspection title",{exact:true})).toBeFocused();
+  expect(analysisRequests).toBe(0);
 });
-
 
 test("preview server keeps inference and server persistence disabled", async ({ request }) => {
   // Local production server only; no photograph, key, or model request.

@@ -23,8 +23,9 @@ export function FindingReview({
         <strong>{f.title}</strong>
       </div>
       <label>
-        Reviewed observation
+        {result.provenance.kind === "manual" ? "Observation description" : "Reviewed observation"}
         <textarea
+          required={result.provenance.kind === "manual"}
           rows={3}
           value={result.edits?.[f.id] ?? f.description}
           maxLength={1200}

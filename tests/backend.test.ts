@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after } from "node:test";
 import { LocalStore } from "../lib/server/store";
+import { savedSchema, manualSchema, newManualInspection } from "../lib/inspection";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import sharp from "sharp";
@@ -281,4 +282,16 @@ test("unavailable durable storage prevents all inference", async () => {
   const post=createAnalyzeHandler({env,store:()=>{throw new Error("storage unavailable");},infer:async()=>{called=true;return report;}});
   assert.equal((await post(await upload())).status,500);
   assert.equal(called,false);
+});
+
+
+test("legacy provenance is unknown; manual records require human identity and valid review references",()=>{
+  const legacy=savedSchema.parse({id:"legacy",date:"",question:"",filename:"",report,reviews:{}});
+  assert.deepEqual(legacy.provenance,{kind:"legacy_unknown"});
+  const human={...newManualInspection(),question:"Human visit"};
+  assert.equal(manualSchema.safeParse(human).success,true);
+  assert.equal(manualSchema.safeParse({...human,provenance:{kind:"ai",model:"fake"}}).success,false);
+  assert.equal(manualSchema.safeParse({...human,notes:{foreign:"bad reference"}}).success,false);
+  assert.equal(manualSchema.safeParse({...human,question:" "}).success,false);
+  assert.equal(manualSchema.safeParse({...human,report:{...human.report,findings:[{id:"blank",category:"observation",title:" ",description:" ",evidence:"",limitation:""}]}}).success,false);
 });

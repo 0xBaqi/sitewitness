@@ -1,10 +1,10 @@
-# SiteWitness v0.4 — local durable controls
+# SiteWitness v0.5 — manual inspection workspace
 
-A browser-local construction-photo review workspace with a server-side Meta adapter. Synthetic browser and backend tests pass; real Meta access, billing, inference quality and deployment have NOT been verified. No SAM masks or spatial annotations are implemented.
+Create an inspection, add photographs, write human observations, record notes and review decisions, save, reopen, and export. AI analysis is unavailable and locked off; manual observations are never represented as AI findings.
 
-## Local setup
+## Run locally
 
-Verified locally with Node.js 24.21.0.
+Use Node.js 24.x (verified runtime: 24.21.0).
 
 ```bash
 npm ci
@@ -12,12 +12,13 @@ cp .env.example .env.local
 npm run dev
 ```
 
-Keep `INFERENCE_ENABLED=false`. The workspace can load existing browser-local reports without inference. Set `MODEL_API_KEY` and `SITEWITNESS_ACCESS_CODE` only in local/server environments, never `NEXT_PUBLIC_`. The live route is also locked in code for this milestone; changing the flag cannot unlock it. Any future live-inference change requires explicit authorization and review.
+Open the local URL shown by Next.js. Choose **New manual inspection**. No account, access code, or model key is needed for browser-local manual work. Save explicitly; exports include the current draft and original photographs. Anyone with access to the same browser profile can access saved records. Browser data is not encrypted by this application and is not cloud backup.
 
-## Verification without external inference
+Keep `INFERENCE_ENABLED=false`, `INFERENCE_CALL_LIMIT=0`, and server storage disabled unless deliberately configuring the optional local API. Environment flags cannot unlock the live inference handler. No Meta request, paid service, push, or deployment is authorized by this README.
+
+## Verification
 
 ```bash
-npx playwright install --with-deps chromium
 npm run test:backend
 npm run typecheck
 npm run build
@@ -26,23 +27,15 @@ npm audit
 git diff --check
 ```
 
-Browser tests use fresh contexts on localhost:3107 and clearly labelled SYNTHETIC TEST DATA. Test routes block external and analysis requests; backend HTTP is stubbed only in tests. No fixture endpoint exists in the app. Generated screenshots/traces are ignored by Git.
+Browser tests require an installed Playwright Chromium browser and its system libraries. All fixtures are clearly labeled synthetic. Browser traffic to external hosts/analysis is blocked; backend HTTP uses injected stubs. Tests do not establish real model availability or quality.
 
-## Implemented and verified locally
+## Persistence and provenance
 
-- JPEG/PNG/WebP upload validation, bounded request bodies, image decoding and metadata-stripped JPEG transmission preparation.
-- Typed Meta adapter with bounded, schema-validated responses and safe timeout/error mapping; tested with deterministic stubs, not live inference.
-- Finding selection, reviewer decisions, edited observations, notes, history switching and JSON export.
-- Original photograph retention in real IndexedDB and restoration across refresh.
-- Critical mobile/keyboard/loading/error and corrupt-history checks.
+- Manual records and photographs save atomically in a separate IndexedDB database, with revision conflict checks, visible save failures, a 25-record cap, and explicit deletion.
+- Human-authored, AI-generated, and legacy/unknown provenance are distinct in types, storage, UI, and exports. Unlabeled old records remain unverified; their existing review and photo-restoration workflow is preserved.
+- The encrypted per-user SQLite API remains optional and local-host-only. Manual writes require manual provenance; clients cannot claim AI generation. Browser history does not sync with the API, and server photograph storage is not implemented.
+- Vercel preview configuration keeps both backend persistence and AI disabled. A preview can offer browser-local manual inspection, not authenticated cloud storage.
 
-## Deployment status
+[v0.5 workflow, architecture assessment, and production blockers](docs/v0.5-readiness.md) · [Historical v0.4 controls](docs/v0.4-readiness.md) · [Evaluation plan](docs/evaluation-plan.md)
 
-Vercel configuration is prepared only; nothing has been deployed. Inference is disabled by default. Public production remains blocked on durable abuse/budget controls, per-user access, privacy/retention policy, and authorized real-photo evaluation. SQLite now provides durable single-host rate/call reservations and an optional encrypted, per-user inspection API. This storage is rejected on Vercel; preview APIs remain disabled. Browser history is not automatically synchronized. The call allowance is not a monetary budget, and the analysis shared code remains a controlled-trial limitation.
-
-- [v0.4 configuration, verification, and limitations](docs/v0.4-readiness.md)
-- [Historical v0.3 production readiness and server environment variables](docs/production-readiness.md)
-- [Verified browser/backend acceptance evidence](docs/browser-acceptance.md)
-- [Real-photograph evaluation plan — no results yet](docs/evaluation-plan.md)
-
-Observations are preliminary, never engineering certifications. Browser records and original image metadata can be sensitive; use only authorized images under an appropriate privacy policy. JSON export includes report/review data, not photograph bytes.
+No SAM masks, live model results, deployment, or cross-device sync are claimed. Human observations and review decisions are not engineering certifications.

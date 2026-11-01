@@ -9,7 +9,7 @@ export function InspectionHistory({
   return (
     <section className="archive">
       <div className="archivehead">
-        <h2>Inspection history</h2>
+        <h2>Previous inspection history</h2>
         <small>Saved on this browser only · photographs retained locally</small>
       </div>
       {history.length === 0 ? (
@@ -24,7 +24,7 @@ export function InspectionHistory({
             >
               <span>{new Date(h.date).toLocaleString()}</span>
               <strong>{h.filename}</strong>
-              <small>{h.report.findings.length} findings →</small>
+              <small>{h.provenance.kind === "ai" ? "AI-generated" : h.provenance.kind === "manual" ? "Human-authored" : "Origin unverified"} · {h.report.findings.length} findings →</small>
             </button>
           ))}
         </div>

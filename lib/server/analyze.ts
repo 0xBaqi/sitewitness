@@ -157,6 +157,7 @@ export function createAnalyzeHandler(
       return json({
         report,
         model: "muse-spark-1.3",
+        provenance: { kind: "ai", model: "muse-spark-1.3" },
         timestamp: new Date(now()).toISOString(),
       });
     } catch (error) {
