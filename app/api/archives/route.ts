@@ -1,7 +1,11 @@
 import { createInspectionHandler } from "../../../lib/server/inspections";
+import { createRemoteHandler } from "../../../lib/server/remote-handler";
 export const runtime="nodejs";
 export const dynamic="force-dynamic";
-const handler=createInspectionHandler({archives:true});
+export const maxDuration=60;
+const local=createInspectionHandler({archives:true}), remote=createRemoteHandler();
+const handler=(request:Request)=>process.env.SITEWITNESS_STORAGE_PROVIDER==="neon-blob"?remote(request):local(request);
 export const GET=handler;
 export const POST=handler;
+export const PUT=handler;
 export const DELETE=handler;

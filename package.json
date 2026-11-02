@@ -8,23 +8,28 @@
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "test:browser": "playwright test",
-    "test:backend": "tsx --test tests/backend.test.ts tests/storage.test.ts tests/recovery.test.ts",
+    "test:backend": "tsx --test tests/backend.test.ts tests/storage.test.ts tests/recovery.test.ts tests/remote-storage.test.ts",
     "storage:expire": "tsx scripts/expire.ts",
     "test:vault": "playwright test --config playwright.vault.config.ts",
     "test:smoke": "tsx --test tests/deployment.test.ts",
     "storage:recover": "tsx scripts/recover.ts",
-    "test:recovery": "tsx --test tests/recovery.test.ts"
+    "test:recovery": "tsx --test tests/recovery.test.ts",
+    "test:remote": "tsx --test tests/remote-storage.test.ts"
   },
   "dependencies": {
+    "@vercel/blob": "2.4.0",
     "next": "^15.5.0",
+    "pg": "^8.23.1",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "sharp": "^0.35.5",
     "zod": "^4.0.0"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.14",
     "@playwright/test": "^1.64.1",
     "@types/node": "^22.0.0",
+    "@types/pg": "^8.23.1",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "tsx": "^4.23.15",

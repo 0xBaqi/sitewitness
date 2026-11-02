@@ -31,7 +31,12 @@
   ],
   "env": {
     "INFERENCE_ENABLED": "false",
-    "INFERENCE_CALL_LIMIT": "0",
-    "INSPECTION_STORAGE_ENABLED": "false"
-  }
+    "INFERENCE_CALL_LIMIT": "0"
+  },
+  "crons": [
+    {
+      "path": "/api/storage/cleanup",
+      "schedule": "0 3 * * *"
+    }
+  ]
 }
