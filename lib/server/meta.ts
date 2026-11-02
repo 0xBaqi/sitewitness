@@ -1,9 +1,15 @@
 import { reportSchema, type Report } from "../schema";
 import { ServiceError, readBounded } from "./errors";
+export type InferenceReceipt = {
+  model: string | null;
+  inputTokens: number | null;
+  outputTokens: number | null;
+};
 export type InferenceInput = {
   image: Uint8Array;
   question: string;
   apiKey: string;
+  onReceipt?: (receipt: InferenceReceipt) => void;
 };
 export type Inference = (input: InferenceInput) => Promise<Report>;
 const notice =
@@ -13,7 +19,7 @@ export function createMetaAdapter(
   http: typeof fetch = fetch,
   timeoutMs = 45000,
 ): Inference {
-  return async ({ image, question, apiKey }) => {
+  return async ({ image, question, apiKey, onReceipt }) => {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
@@ -68,6 +74,17 @@ export function createMetaAdapter(
       if (!envelope || typeof envelope !== "object")
         throw new Error("Invalid envelope");
       const value = envelope as Record<string, unknown>;
+      const usage = value.usage && typeof value.usage === "object"
+        ? value.usage as Record<string, unknown> : {};
+      const tokenCount = (value: unknown): number | null =>
+        typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : null;
+      onReceipt?.({
+        model: value.model === "muse-spark-1.3" ? value.model : null,
+        inputTokens: tokenCount(usage.input_tokens),
+        outputTokens: tokenCount(usage.output_tokens),
+      });
+      if (value.model !== undefined && value.model !== "muse-spark-1.3")
+        throw new Error("Unexpected model");
       if (
         value.error ||
         (value.status !== undefined && value.status !== "completed")
@@ -94,6 +111,7 @@ export function createMetaAdapter(
             .replace(/\s*```$/, ""),
         ),
       );
+      if (JSON.stringify(parsed).includes(apiKey)) throw new Error("Credential echo");
       return { ...parsed, notice };
     } catch (error) {
       if (controller.signal.aborted)

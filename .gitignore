@@ -11,3 +11,4 @@ node_modules/
 # Private local persistence must never be committed
 *.sqlite*
 .sitewitness-data/
+.vercel

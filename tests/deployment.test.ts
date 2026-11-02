@@ -16,10 +16,11 @@ test("production HTTP archive survives restart; isolation, revocation, deletion 
  const users=["alice","bob"].map((id,i)=>({id,tokenHash:createHash("sha256").update((i?"b":"a").repeat(43)).digest("hex")}));
  const env:NodeJS.ProcessEnv={...process.env,NODE_ENV:"production",NEXT_TELEMETRY_DISABLED:"1",INFERENCE_ENABLED:"false",MODEL_API_KEY:"",SITEWITNESS_ACCESS_CODE:"",VERCEL:"",INSPECTION_STORAGE_ENABLED:"true",SITEWITNESS_DATA_DIR:dir,SITEWITNESS_STORAGE_KEY:key.toString("hex"),SITEWITNESS_PUBLIC_ORIGIN:origin,SITEWITNESS_USERS:JSON.stringify(users)};
  let child:ChildProcess|undefined;
+ let requestNumber=0, startNumber=0;
  async function stop(){if(child && child.exitCode===null){const done=once(child,"exit");child.kill("SIGTERM");await done;}child=undefined;}
- async function start(){child=spawn(process.execPath,["node_modules/next/dist/bin/next","start","--hostname","127.0.0.1","--port","3119"],{env,stdio:"ignore"});
+ async function start(){startNumber++;child=spawn(process.execPath,["node_modules/next/dist/bin/next","start","--hostname","127.0.0.1","--port","3119"],{env,stdio:"ignore"});
   for(let i=0;i<100;i++){if(child?.exitCode!==null)throw new Error("Production server exited");try{if((await fetch(origin,{signal:AbortSignal.timeout(500)})).ok)return;}catch{}await new Promise(r=>setTimeout(r,100));}throw new Error("Production server did not become ready");}
- async function request(method="GET",token="a".repeat(43),body?:unknown,id="",requestOrigin=origin){return fetch(origin+"/api/archives"+(id?"?id="+id:""),{method,headers:{authorization:"Bearer "+token,origin:requestOrigin,"content-type":"application/json"},body:body===undefined?undefined:JSON.stringify(body),signal:AbortSignal.timeout(10000)});}
+ async function request(method="GET",token="a".repeat(43),body?:unknown,id="",requestOrigin=origin){requestNumber++;return fetch(origin+"/api/archives"+(id?"?id="+id:""),{method,headers:{authorization:"Bearer "+token,origin:requestOrigin,"content-type":"application/json"},body:body===undefined?undefined:JSON.stringify(body),signal:AbortSignal.timeout(10000)}).catch(() => {throw new Error(`Archive request ${requestNumber} (${method}) after server start ${startNumber} did not complete`);});}
  try {
   await start();assert.equal((await request("GET","wrong")).status,401);
   assert.equal((await request("GET","a".repeat(43),undefined,"","https://foreign.invalid")).status,403);
