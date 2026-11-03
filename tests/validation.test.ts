@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync, existsSync } from "node:fs";
@@ -6,10 +7,12 @@ import { join } from "node:path";
 import { checkApproval, validateOnce } from "../lib/server/validation";
 import { createMetaAdapter } from "../lib/server/meta";
 const report = { overview: "SYNTHETIC TEST DATA", findings: [], unanswered_questions: [], notice: "synthetic" };
-const approval = () => ({ checkedAt: new Date().toISOString(), creditsOnlyConfirmed: true, nonSensitiveImageConfirmed: true });
-test("stale or missing billing/image confirmation fails closed", () => {
-  for (const value of [{...approval(), creditsOnlyConfirmed:false}, {...approval(), nonSensitiveImageConfirmed:false},
-    {...approval(), checkedAt:"invalid"}, {...approval(), checkedAt:new Date(Date.now()-900001).toISOString()}])
+const approval = () => ({ authorizedAt: new Date().toISOString(), oneRequestAuthorized: true,
+  linkedCardRiskAccepted: true, nonSensitiveImageConfirmed: true,
+  imageSha256: createHash("sha256").update(new Uint8Array([1])).digest("hex") });
+test("missing authorization, risk acceptance or image confirmation fails closed", () => {
+  for (const value of [{...approval(), linkedCardRiskAccepted:false}, {...approval(), nonSensitiveImageConfirmed:false},
+    {...approval(), authorizedAt:"invalid"}, {...approval(), oneRequestAuthorized:false}])
     assert.throws(() => checkApproval(value));
 });
 test("one durable request only, including concurrent starts and uncertain failures", async () => {
@@ -48,4 +51,30 @@ test("adapter captures safe usage and rejects mismatched model or credential ech
   for (const invalid of [{...body,model:"another-model"},
     {...body,output_text:JSON.stringify({...report,overview:input.apiKey})}])
     await assert.rejects(()=>createMetaAdapter(async()=>Response.json(invalid))(input));
+});
+
+test("approval cannot be reused for a different image and does not reserve or call", async () => {
+  const dir=mkdtempSync(join(tmpdir(),"sw-validation-")); let calls=0;
+  try {
+    const reservationPath=join(dir,"reserved");
+    await assert.rejects(()=>validateOnce({image:new Uint8Array([2]),apiKey:"synthetic",
+      approval:approval(),reservationPath,infer:async()=>{calls++;return report;}}));
+    assert.equal(calls,0); assert.equal(existsSync(reservationPath),false);
+  } finally {rmSync(dir,{recursive:true,force:true});}
+});
+test("real adapter sends one image, bounded output, no tools and never retries a rejection", async () => {
+  let calls=0;
+  const adapter=createMetaAdapter(async (_url,options) => {
+    calls++;
+    const body=JSON.parse(String(options?.body));
+    assert.equal(body.max_output_tokens,1800);
+    assert.equal(body.model,"muse-spark-1.3");
+    assert.equal(body.input.length,1);
+    assert.equal(body.input[0].content.filter((x: {type:string})=>x.type==="input_image").length,1);
+    assert.equal(body.tools,undefined); assert.equal(body.background,undefined);
+    assert.equal(options?.redirect,"error");
+    return Response.json({}, {status:429});
+  });
+  await assert.rejects(()=>adapter({image:new Uint8Array([1]),question:"synthetic",apiKey:"synthetic"}));
+  assert.equal(calls,1);
 });

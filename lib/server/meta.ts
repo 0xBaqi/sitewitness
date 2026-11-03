@@ -1,5 +1,6 @@
 import { reportSchema, type Report } from "../schema";
 import { ServiceError, readBounded } from "./errors";
+export const META_MAX_OUTPUT_TOKENS = 1800;
 export type InferenceReceipt = {
   model: string | null;
   inputTokens: number | null;
@@ -50,7 +51,7 @@ export function createMetaAdapter(
               ],
             },
           ],
-          max_output_tokens: 1800,
+          max_output_tokens: META_MAX_OUTPUT_TOKENS,
         }),
       });
       if (!response.ok) {

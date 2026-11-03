@@ -1,3 +1,5 @@
+> Historical checkpoint: the credit-only attestation requirement below is superseded by [the one-request authorization gate](m4-controlled-validation.md). The previously confirmed $150 balance is accepted; explicit residual linked-card risk approval remains required.
+
 # SiteWitness M4 checkpoint — 2 November 2026
 
 ## Outcome
