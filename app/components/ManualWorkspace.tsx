@@ -84,7 +84,7 @@ export function ManualWorkspace({legacyError}:{legacyError:string}) {
   }
   const record=draft?.inspection, finding=record?.report.findings[selected];
   return <section className="manual-workspace" aria-labelledby="manual-heading">
-    <div className="availability" role="status"><strong>AI analysis is unavailable.</strong> You can create a complete manual inspection now. No photograph or observation is sent to Meta.</div>
+    <div className="availability" role="status"><strong>Your observations. Your inspection.</strong> Add any site photograph and record what you see. New live AI analysis is disabled; this manual workflow sends nothing to Meta.</div>
     <div className="manual-heading"><div><p className="eyebrow">HUMAN-AUTHORED · NO AI FINDINGS</p><h2 id="manual-heading">Manual inspections</h2></div><button className="primary" onClick={create} disabled={loading||busy}>New manual inspection</button></div>
     <p className="hint">Create an inspection, add photographs and observations, then save. This workspace is private to this browser profile, not a signed-in account. Anyone using this profile can access it. Exported JSON includes photographs and may contain sensitive information.</p>
     {loading&&<p role="status">Loading saved manual inspections…</p>}
@@ -113,7 +113,7 @@ export function ManualWorkspace({legacyError}:{legacyError:string}) {
         </div>}
         <p className="notice">{manualNotice}</p>
         <div className="manual-actions"><button type="submit" className="primary">{busy?"Please wait…":"Save manual inspection"}</button><button type="button" className="secondary" onClick={download}>Export manual JSON with photographs</button>{record.revision>0&&<button type="button" className="secondary" onClick={remove}>Delete saved inspection</button>}</div>
-      </fieldset>:!loading&&<p className="empty-manual">Start with “New manual inspection”. Add what you observed, even when AI is unavailable. No account or API key is needed for browser-local work.</p>}
+      </fieldset>:!loading&&<p className="empty-manual">Start with “New manual inspection”. Add photographs and your own observations. No account or API key is needed for browser-local work.</p>}
     </form>
     <h3>Saved manual inspections</h3>
     {!loading&&!records.length&&<p>No manual inspections saved yet.</p>}

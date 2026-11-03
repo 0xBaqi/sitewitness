@@ -270,11 +270,11 @@ test("SYNTHETIC TEST DATA: mobile layout, keyboard controls and corrupt history"
   ).toBeVisible();
 });
 
-test("AI unavailable state offers manual creation without sending an analysis request", async ({page}) => {
+test("Manual creation explains live analysis status without sending an analysis request", async ({page}) => {
   let analysisRequests=0;
   page.on("request",req=>{if(new URL(req.url()).pathname==="/api/analyze")analysisRequests++;});
   await page.goto("/");
-  await expect(page.getByText("AI analysis is unavailable.",{exact:true})).toBeVisible();
+  await expect(page.getByText("Your observations. Your inspection.",{exact:true})).toBeVisible();
   await expect(page.getByRole("button",{name:"New manual inspection"})).toBeEnabled();
   await page.getByRole("button",{name:"New manual inspection"}).click();
   await expect(page.getByLabel("Inspection title",{exact:true})).toBeFocused();

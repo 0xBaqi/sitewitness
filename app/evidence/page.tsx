@@ -1,8 +1,10 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { asSaved, audit, captured, fingerprint, matchesCapturedPhoto, newReview, questionAudit, type HumanReview } from "../../lib/captured";
 import { deleteCaptured, loadCaptured, saveCaptured, type CapturedReview } from "../../lib/captured-storage";
 import { FindingReview } from "../components/FindingReview";
+
+import { InspectionIntro } from "../components/InspectionIntro";
 
 export default function EvidencePage(){
   const [draft,setDraft]=useState<CapturedReview|null>(null);
@@ -12,6 +14,8 @@ export default function EvidencePage(){
   useEffect(()=>{let active=true;loadCaptured().then(v=>{if(active)setSaved(!!v);}).catch(()=>{if(active)setError("Saved review could not be read. Nothing was overwritten.");}).finally(()=>{if(active)setLoading(false);});return()=>{active=false;};},[]);
   useEffect(()=>{if(!draft?.photo){setPhotoUrl("");return;}const url=URL.createObjectURL(draft.photo);setPhotoUrl(url);return()=>URL.revokeObjectURL(url);},[draft?.photo]);
   useEffect(()=>{if(!dirty)return;const warn=(e:BeforeUnloadEvent)=>{e.preventDefault();e.returnValue="";};window.addEventListener("beforeunload",warn);return()=>window.removeEventListener("beforeunload",warn);},[dirty]);
+  const autoOpened=useRef(false);
+  useEffect(()=>{if(!loading&&!autoOpened.current&&new URLSearchParams(window.location.search).get("sample")==="1"){autoOpened.current=true;void openPhoto();}},[loading]);
   const mayLeave=()=>!dirty||confirm("Discard unsaved review changes? Save or export first to keep them.");
   async function openPhoto(file?:File){
     if(!mayLeave())return;setBusy(true);setError("");setStatus("Verifying photograph against the captured result…");
@@ -52,26 +56,31 @@ export default function EvidencePage(){
   }
   const human=draft?.human,finding=captured.report.findings[selected];
   return <main className="trace-page">
-    <header className="top"><a className="brand" href="/"><span className="mark">SW</span><span>SiteWitness</span></a><span className="tag">EVIDENCE TRACE / CAPTURED RESULT</span></header>
-    <section className="hero"><p className="eyebrow">PHOTOGRAPH → AI OBSERVATION → HUMAN REVIEW</p><h1>See the evidence.<br/><em>Own the judgement.</em></h1><p className="lead">Review a genuine Muse Spark report alongside its source photograph. Keep every correction and decision separate from the original AI observations.</p></section>
-    <div className="availability"><strong>Captured result · no new inference.</strong> This report was generated on 3 November 2026 at 01:58 WAT. Live analysis is disabled. Only this photograph has a captured report; use <a href="/">manual inspections</a> for other photos.</div>
-    <ol className="trace-steps" aria-label="Review journey"><li>Choose photograph</li><li>Inspect captured report</li><li>Review and edit</li><li>Save and export</li></ol>
-    <section className="panel" aria-label="Choose evidence" aria-busy={busy}>
-      <div className="manual-heading"><h2>01 / Choose the evidence</h2><button className="primary" disabled={busy||loading} onClick={()=>void openPhoto()}>Open captured sample</button></div>
-      <label className="trace-upload">Or select the original sample photograph<input type="file" accept="image/jpeg" disabled={busy||loading} onChange={e=>{const file=e.target.files?.[0];e.target.value="";if(file)void openPhoto(file);}}/></label>
-      <p className="hint">Selection is checked locally against the original or prepared image fingerprint. Your selected file is not uploaded. The prepared 800 × 600 photograph is used for review and export.</p>
-      {saved&&<button className="secondary" disabled={busy||loading} onClick={()=>void reopen()}>Reopen saved review</button>}
-    </section>
+    <header className="top experience-top"><a className="brand" href="/"><span className="mark">SW</span><span>SiteWitness</span></a><nav aria-label="Workspace navigation"><a href="/#manual">Manual workspace</a><a href="#review-record">Review record</a></nav></header>
+    {!draft&&<InspectionIntro onExplore={()=>void openPhoto()} disabled={busy||loading}/>}
+    {draft&&<><section className="review-heading"><div><p className="eyebrow">EVIDENCE TRACE / CONSTRUCTION INSPECTION</p><h1>The evidence. Your judgement.</h1></div><span className="tag">META / MUSE SPARK 1.3</span></section><p className="capture-caption"><span className="capture-dot" aria-hidden="true"/> Previously generated real Meta AI report; new live analysis disabled.</p></>}
+    <div className="trace-tools" id="review-record">
+      <div className="tool-status"><strong>{draft?"Browser-local review":"Captured result · no new inference."}</strong><p className="save-status" role="status">{dirty?"Unsaved changes. ":""}{status|| (draft?"Review each observation, then save or export.":"Explore the real report to record your decisions.")}</p></div>
+      {draft&&<div className="manual-actions"><button className="primary" disabled={busy} onClick={()=>void save()}>Save review and photograph</button><button className="secondary" disabled={busy} onClick={()=>void download()}>Export review with photograph</button></div>}
+    </div>
     {error&&<p className="error" role="alert">{error}</p>}
-    <p className="save-status" role="status">{dirty?"Unsaved changes. ":""}{status}</p>
+    <details className="evidence-options"><summary>Sample selection &amp; saved review</summary>
+      <section aria-label="Choose evidence" aria-busy={busy}>
+        <div className="manual-heading"><h2>Choose the evidence</h2><button className="secondary" disabled={busy||loading} onClick={()=>void openPhoto()}>Open captured sample</button></div>
+        <label className="trace-upload">Or select the original sample photograph<input type="file" accept="image/jpeg" disabled={busy||loading} onChange={e=>{const file=e.target.files?.[0];e.target.value="";if(file)void openPhoto(file);}}/></label>
+        <p className="hint">Checked locally against the original or prepared image fingerprint. Nothing is uploaded. Review and export use the prepared 800 × 600 photograph.</p>
+        {saved&&<button className="secondary" disabled={busy||loading} onClick={()=>void reopen()}>Reopen saved review</button>}
+      </section>
+    </details>
     {human&&draft&&<>
       <div className="shell trace-shell">
-        <section className="panel trace-photo"><h2>02 / Source photograph</h2>{photoUrl&&<a href={photoUrl} target="_blank" rel="noreferrer"><img src={photoUrl} alt="Captured construction photograph with timber formwork, diagonal props and exposed reinforcement"/></a>}<p className="hint">Open the image to inspect it at full size. No SAM localization has been performed; no boxes or masks are available.</p><p className="notice">{captured.report.notice}</p>
-          <details><summary>Capture provenance and usage</summary><dl><dt>Model</dt><dd>{captured.model}</dd><dt>Response</dt><dd>HTTP 200 · structured validation passed</dd><dt>Latency</dt><dd>18.055 seconds</dd><dt>Tokens</dt><dd>1,028 input / 1,528 output, including 959 reasoning tokens</dd><dt>Estimated cost</dt><dd>$0.007779 · billing unverified</dd><dt>Image SHA-256</dt><dd className="fingerprint">{captured.imageSha256}</dd></dl></details>
+        <section className="panel trace-photo"><h2>01 / Source photograph</h2>{photoUrl&&<a href={photoUrl} target="_blank" rel="noreferrer"><img src={photoUrl} alt="Captured construction photograph with timber formwork, diagonal props and exposed reinforcement"/></a>}<p className="hint">Open the image to inspect it at full size. No SAM localization has been performed; no boxes or masks are available.</p><p className="notice">{captured.report.notice}</p>
+          <div className="photo-findings"><h3>3 follow-up questions</h3><ol>{captured.report.unanswered_questions.map(q=><li key={q}>{q}</li>)}</ol><a href="#follow-up">Add your answers ↓</a></div>
+          <details><summary>Capture provenance and usage</summary><dl><dt>Generated</dt><dd>3 November 2026 · 01:58 WAT</dd><dt>Model</dt><dd>{captured.model}</dd><dt>Response</dt><dd>HTTP 200 · structured validation passed</dd><dt>Latency</dt><dd>18.055 seconds</dd><dt>Tokens</dt><dd>1,028 input / 1,528 output, including 959 reasoning tokens</dd><dt>Estimated cost</dt><dd>$0.007779 · billing unverified</dd><dt>Image SHA-256</dt><dd className="fingerprint">{captured.imageSha256}</dd></dl></details>
         </section>
-        <section className="panel"><h2>03 / Review the observations</h2><p className="tag">ORIGINAL AI REPORT · MUSE SPARK 1.3</p><p className="summary">{captured.report.overview}</p><p className="hint">Overview audit: the broad scene is supported. Construction stage, hidden conditions and structural adequacy remain unverified. No defect is established by these four observations.</p>
+        <section className="panel trace-review" id="observations"><h2>02 / Review the observations</h2><p className="tag">ORIGINAL AI REPORT · MUSE SPARK 1.3</p><p className="summary">{captured.report.overview}</p><p className="hint">Overview audit: the broad scene is supported. Construction stage, hidden conditions and structural adequacy remain unverified. No defect is established by these four observations.</p>
           <p>{captured.report.findings.filter(f=>human.reviews[f.id as keyof typeof human.reviews]&&human.reviews[f.id as keyof typeof human.reviews]!=="unreviewed").length} of 4 decisions recorded · human review required</p>
-          <nav className="finding-selector" aria-label="Select captured finding">{captured.report.findings.map((f,i)=><button className="secondary" key={f.id} aria-pressed={selected===i} onClick={()=>setSelected(i)}>{i+1}. {f.title}</button>)}</nav>
+          <nav className="finding-selector" aria-label="Select captured finding">{captured.report.findings.map((f,i)=><button className="secondary" key={f.id} aria-pressed={selected===i} onClick={()=>setSelected(i)}>{i+1}. {f.title}<span className="decision-label">{{unreviewed:"Not reviewed",accepted:"Accepted as observation",rejected:"Rejected / unsupported",investigate:"Investigate"}[human.reviews[f.id as keyof typeof human.reviews]||"unreviewed"]}</span></button>)}</nav>
           <fieldset className="manual-fields" disabled={busy}><legend>Human review · original AI text stays unchanged</legend>
             <div className="trace-original"><strong>Original AI description</strong><p>{finding.description}</p></div>
             <p className="notice"><b>AI-assisted evidence audit (not human sign-off):</b> {audit[selected]}</p>
@@ -79,9 +88,9 @@ export default function EvidencePage(){
           </fieldset>
         </section>
       </div>
-      <section className="panel trace-questions"><h2>Follow-up questions</h2><p className="hint">Original AI questions, audit qualifications and human answers remain separate.</p><fieldset className="manual-fields" disabled={busy}>{captured.report.unanswered_questions.map((q,i)=><div key={q}><h3>{i+1}. {q}</h3><p className="hint">AI-assisted audit: {questionAudit[i]}</p><label>Human answer / evidence for question {i+1}<textarea rows={2} maxLength={1000} value={human.answers[i]} onChange={e=>change(v=>({...v,answers:v.answers.map((answer,j)=>i===j?e.target.value:answer)}))}/></label></div>)}</fieldset></section>
-      <section className="panel trace-save"><h2>04 / Keep a reviewable record</h2><fieldset className="manual-fields" disabled={busy}><label>Reviewer name (self-declared, optional)<input value={human.reviewer} maxLength={120} onChange={e=>change(v=>({...v,reviewer:e.target.value}))}/></label></fieldset><p className="hint">Saved in this browser profile, including the photograph. Anyone using this profile can access it. This is not authenticated cloud storage or a signed engineering report. Export includes current edits, even if not saved. The private vault currently supports manual records only.</p><div className="manual-actions"><button className="primary" disabled={busy} onClick={()=>void save()}>Save review and photograph</button><button className="secondary" disabled={busy} onClick={()=>void download()}>Export review with photograph</button>{saved&&<button className="secondary" disabled={busy} onClick={()=>void remove()}>Delete saved review</button>}</div></section>
+      <section className="panel trace-questions" id="follow-up"><h2>Follow-up questions</h2><p className="hint">Original AI questions, audit qualifications and human answers remain separate.</p><fieldset className="manual-fields" disabled={busy}>{captured.report.unanswered_questions.map((q,i)=><div key={q}><h3>{i+1}. {q}</h3><p className="hint">AI-assisted audit: {questionAudit[i]}</p><label>Human answer / evidence for question {i+1}<textarea rows={2} maxLength={1000} value={human.answers[i]} onChange={e=>change(v=>({...v,answers:v.answers.map((answer,j)=>i===j?e.target.value:answer)}))}/></label></div>)}</fieldset></section>
+      <section className="panel trace-save"><h2>Keep a reviewable record</h2><fieldset className="manual-fields" disabled={busy}><label>Reviewer name (self-declared, optional)<input value={human.reviewer} maxLength={120} onChange={e=>change(v=>({...v,reviewer:e.target.value}))}/></label></fieldset><p className="hint">Saved in this browser profile, including the photograph. Anyone using this profile can access it. This is not authenticated cloud storage or a signed engineering report. Export includes current edits, even if not saved. The private vault currently supports manual records only.</p><div className="manual-actions">{saved&&<button className="secondary" disabled={busy} onClick={()=>void remove()}>Delete saved review</button>}</div></section>
     </>}
-    <footer><span>SiteWitness / Evidence before conclusions.</span><a href="/">Return to manual inspections</a></footer>
+    <footer><span>SiteWitness / Evidence before conclusions.</span><a href="/#manual">Return to manual inspections</a></footer>
   </main>;
 }

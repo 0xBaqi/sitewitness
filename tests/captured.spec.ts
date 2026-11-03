@@ -12,8 +12,9 @@ test.beforeEach(async({context})=>{
 });
 test("captured photo selection, immutable AI, human review, atomic reopen and complete export",async({page})=>{
   const requests:string[]=[],errors:string[]=[];page.on("request",r=>{if(new URL(r.url()).pathname.startsWith('/api/'))requests.push(r.url());});page.on("pageerror",e=>errors.push(e.message));
-  await page.goto('/');await page.getByRole('link',{name:'Review captured AI report →'}).click();
+  await page.goto('/evidence');
   await expect(page.getByText('Captured result · no new inference.',{exact:true})).toBeVisible();
+  await page.getByText('Sample selection & saved review',{exact:true}).click();
   await page.getByLabel('Or select the original sample photograph').setInputFiles('public/evidence/captured-construction.jpg');
   await expect(page.getByRole('img',{name:/Captured construction photograph/})).toBeVisible();
   await expect(page.getByText('0 of 4 decisions recorded · human review required')).toBeVisible();
@@ -24,7 +25,7 @@ test("captured photo selection, immutable AI, human review, atomic reopen and co
   await page.getByLabel('Reviewer name').fill('Test reviewer');
   await page.getByRole('button',{name:'Save review and photograph',exact:true}).click();
   await expect(page.getByRole('status')).toContainText('Review and photograph saved');
-  await page.reload();await page.getByRole('button',{name:'Reopen saved review'}).click();
+  await page.reload();await page.getByText('Sample selection & saved review',{exact:true}).click();await page.getByRole('button',{name:'Reopen saved review'}).click();
   await expect(page.getByRole('textbox',{name:'Reviewed observation',exact:true})).toHaveValue('SYNTHETIC REVIEW INPUT: timber forms are visible; stability not verified.');
   await expect(page.getByLabel('Reviewer decision')).toHaveValue('investigate');
   await expect(page.locator('.trace-original')).toContainText(source.report.findings[0].description);
@@ -50,6 +51,7 @@ test("captured photo selection, immutable AI, human review, atomic reopen and co
 });
 test('unrelated photograph and corrupt sample never acquire a captured report',async({page})=>{
   await page.goto('/evidence');
+  await page.getByText('Sample selection & saved review',{exact:true}).click();
   await page.getByLabel('Or select the original sample photograph').setInputFiles({name:'unrelated.jpg',mimeType:'image/jpeg',buffer:Buffer.from('not the captured photograph')});
   await expect(page.getByRole('main').getByRole('alert')).toContainText('has no captured report');
   await expect(page.getByLabel('Reviewer decision')).toHaveCount(0);
@@ -59,7 +61,7 @@ test('unrelated photograph and corrupt sample never acquire a captured report',a
   await expect(page.getByLabel('Reviewer decision')).toHaveCount(0);
 });
 test('storage failure keeps draft exportable and concurrent review cannot overwrite',async({page,context})=>{
-  await page.goto('/evidence');await page.getByRole('button',{name:'Open captured sample'}).click();
+  await page.goto('/evidence');await page.getByRole('button',{name:'Explore AI inspection'}).click();
   await expect(page.getByLabel('Reviewer decision')).toBeVisible();
   await page.evaluate(()=>{const original=IDBDatabase.prototype.transaction;(window as any).restoreStorage=()=>{IDBDatabase.prototype.transaction=original;};IDBDatabase.prototype.transaction=function(...args:Parameters<typeof original>){if(args[1]==='readwrite')throw new DOMException('Storage unavailable','QuotaExceededError');return original.apply(this,args);};});
   await page.getByLabel('Reviewer notes').fill('Keep this draft');await page.getByRole('button',{name:'Save review and photograph'}).click();
@@ -69,10 +71,10 @@ test('storage failure keeps draft exportable and concurrent review cannot overwr
   const exported=JSON.parse(await readFile((await (await waiting).path())!,'utf8'));expect(exported.containsUnsavedChanges).toBe(true);
   await page.evaluate(()=>(window as any).restoreStorage());await page.getByRole('button',{name:'Save review and photograph'}).click();
   await expect(page.getByRole('status')).toContainText('Review and photograph saved');
-  const other=await context.newPage();await other.goto('/evidence');await other.getByRole('button',{name:'Reopen saved review'}).click();
+  const other=await context.newPage();await other.goto('/evidence');await other.getByText('Sample selection & saved review',{exact:true}).click();await other.getByRole('button',{name:'Reopen saved review'}).click();
   await page.getByLabel('Reviewer notes').fill('First tab update');await page.getByRole('button',{name:'Save review and photograph'}).click();
   await expect(page.getByRole('status')).toContainText('Review and photograph saved');
   await other.getByLabel('Reviewer notes').fill('Stale tab update');await other.getByRole('button',{name:'Save review and photograph'}).click();
   await expect(other.getByRole('main').getByRole('alert')).toContainText('changed in another tab');
-  await other.close();await page.reload();await page.getByRole('button',{name:'Reopen saved review'}).click();await expect(page.getByLabel('Reviewer notes')).toHaveValue('First tab update');
+  await other.close();await page.reload();await page.getByText('Sample selection & saved review',{exact:true}).click();await page.getByRole('button',{name:'Reopen saved review'}).click();await expect(page.getByLabel('Reviewer notes')).toHaveValue('First tab update');
 });

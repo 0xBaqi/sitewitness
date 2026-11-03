@@ -5,6 +5,7 @@ import { loadPhoto } from "../lib/photos";
 import { FindingReview } from "./components/FindingReview";
 import { InspectionHistory } from "./components/InspectionHistory";
 import { ManualWorkspace } from "./components/ManualWorkspace";
+import { InspectionIntro } from "./components/InspectionIntro";
 const key = "sitewitness-inspections-v1";
 export default function Page() {
   const [error, setError] = useState("");
@@ -113,28 +114,18 @@ export default function Page() {
   }
   return (
     <main>
-      <header className="top">
+      <header className="top experience-top">
         <div className="brand">
           <span className="mark">SW</span>
           <span>SiteWitness</span>
         </div>
-        <span className="tag">FIELD EVIDENCE / ALPHA</span>
+        <nav aria-label="Workspace navigation"><a href="/evidence?sample=1">AI inspection</a><a href="#manual">Manual workspace</a></nav>
       </header>
-      <section className="hero">
-        <p className="eyebrow">FIELD PHOTOGRAPHS · HUMAN OBSERVATIONS</p>
-        <h1>
-          Observe the site.
-          <br />
-          <em>Question the evidence.</em>
-        </h1>
-        <p className="lead">
-          Record what you see. Add photographs, write observations, and keep a
-          reviewable inspection record — no AI access required.
-        </p>
+      <InspectionIntro />
+      <section id="manual" className="manual-section" aria-label="Manual inspection workspace">
+        <div className="section-divider"><strong>Have another site photograph?</strong><a href="/vault">Private server snapshots →</a></div>
+        <ManualWorkspace legacyError={error} />
       </section>
-      <p><a href="/vault">Private server snapshots</a> · Create → photograph → record observations → review → save → export.</p>
-      <section className="availability trace-entry"><strong>Evidence Trace: a genuine Muse Spark report, ready for review.</strong><p>Inspect the captured photograph and original AI observations, record your decisions, then save and export. No new inference.</p><a className="secondary" href="/evidence">Review captured AI report →</a></section>
-      <ManualWorkspace legacyError={error} />
       <section hidden={!history.length && !error} aria-label="Previous inspections">
       <div className="legacy-workspace">
         <section className="panel result">
@@ -148,7 +139,7 @@ export default function Page() {
               <h3>Awaiting an inspection</h3>
               <p>
                 Previously saved records appear here. Start a manual inspection
-                above to create a new record. AI analysis is unavailable.
+                above to create a new record. New live AI analysis is disabled.
               </p>
             </div>
           ) : (
