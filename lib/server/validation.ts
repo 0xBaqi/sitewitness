@@ -1,11 +1,11 @@
 import { openSync, writeSync, fsyncSync, closeSync } from "node:fs";
-import { createMetaAdapter, type Inference, type InferenceReceipt, META_MAX_OUTPUT_TOKENS } from "./meta";
+import { createMetaAdapter, type Inference, type InferenceReceipt, type InferenceDiagnostic, META_MAX_OUTPUT_TOKENS } from "./meta";
 import { createHash } from "node:crypto";
 
-// Full advertised 1M-token input window, priced uncached, plus bounded output.
+// Full advertised 1,048,576-token input window, priced uncached, plus bounded output.
 // Deliberately conservative planning estimate; NOT a provider/card spending cap.
 export const CONSERVATIVE_ESTIMATE_USD = Math.ceil(
-  (1_000_000 * 1.25 + META_MAX_OUTPUT_TOKENS * 4.25) / 1_000_000 * 100,
+  (1_048_576 * 1.25 + META_MAX_OUTPUT_TOKENS * 4.25) / 1_000_000 * 100,
 ) / 100;
 export type ValidationApproval = {
   authorizedAt: string;
@@ -40,12 +40,14 @@ export async function validateOnce(options: {
   } finally { closeSync(fd); }
   const started = Date.now();
   let receipt: InferenceReceipt | null = null;
+  let diagnostic: InferenceDiagnostic | null = null;
   let report = null;
   let status = "failed-or-unknown";
   try {
-    report = await (options.infer ?? createMetaAdapter())({
+    report = await (options.infer ?? createMetaAdapter(undefined, 90000))({
       image: options.image, apiKey: options.apiKey,
       question: "Describe visible construction elements and uncertainties. Do not assess structural safety or compliance.",
+      onDiagnostic(value) { diagnostic = value; },
       onReceipt(value) { receipt = value; },
     });
     const observed = receipt as InferenceReceipt | null;
@@ -54,6 +56,7 @@ export async function validateOnce(options: {
   } catch { /* Never persist raw errors, headers, credentials, or provider bodies. */ }
   const usage = receipt as InferenceReceipt | null;
   return {
+    diagnostic: diagnostic as InferenceDiagnostic | null, maximumOutputTokens: META_MAX_OUTPUT_TOKENS,
     status, requestedModel: "muse-spark-1.3", receipt: usage,
     timestamp: new Date().toISOString(), latencyMs: Date.now() - started,
     imageSha256,

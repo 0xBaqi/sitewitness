@@ -67,7 +67,7 @@ test("real adapter sends one image, bounded output, no tools and never retries a
   const adapter=createMetaAdapter(async (_url,options) => {
     calls++;
     const body=JSON.parse(String(options?.body));
-    assert.equal(body.max_output_tokens,1800);
+    assert.equal(body.max_output_tokens,6000);
     assert.equal(body.model,"muse-spark-1.3");
     assert.equal(body.input.length,1);
     assert.equal(body.input[0].content.filter((x: {type:string})=>x.type==="input_image").length,1);
@@ -77,4 +77,63 @@ test("real adapter sends one image, bounded output, no tools and never retries a
   });
   await assert.rejects(()=>adapter({image:new Uint8Array([1]),question:"synthetic",apiKey:"synthetic"}));
   assert.equal(calls,1);
+});
+
+test("reasoning items do not prevent a valid message report", async () => {
+  let diagnostic: any;
+  const body = { model:"muse-spark-1.3", status:"completed", output:[
+    {type:"reasoning", summary:[]},
+    {type:"message", content:[{type:"output_text", text:JSON.stringify(report)}]},
+  ] };
+  const result = await createMetaAdapter(async (_url, options) => {
+    const request = JSON.parse(String(options?.body));
+    assert.equal(request.store,false);
+    assert.equal(request.reasoning.effort,"low");
+    assert.equal(request.text.format.type,"json_schema");
+    assert.equal(request.text.format.strict,true);
+    const schema=request.text.format.schema;
+    assert.equal(schema.additionalProperties,false);
+    assert.equal(schema.properties.findings.items.additionalProperties,false);
+    assert.deepEqual([...schema.required].sort(),Object.keys(schema.properties).sort());
+    return Response.json(body);
+  })({image:new Uint8Array([1]),question:"synthetic",apiKey:"SYNTHETIC_KEY",onDiagnostic:d=>{diagnostic=d;}});
+  assert.equal(result.overview,report.overview);
+  assert.equal(diagnostic.stage,"validated");
+});
+
+// Synthetic envelopes: the original response text/status were NOT captured.
+test("failure diagnostics distinguish truncation, JSON, schema, refusal and empty output without leaking text", async () => {
+  const cases = [
+    [{status:"incomplete",incomplete_details:{reason:"max_output_tokens"},usage:{output_tokens_details:{reasoning_tokens:1394}},output_text:'{"overview":'},"output-token-limit"],
+    [{output_text:'{"overview":'},"report-json"],
+    [{output_text:JSON.stringify({...report,findings:[{id:"f1",category:"SECRET PROVIDER TEXT"}]})},"report-schema"],
+    [{output:[{type:"message",content:[{type:"refusal",refusal:"SECRET PROVIDER TEXT"}]}]},"refusal"],
+    [{output:[{type:"reasoning",summary:[]}]},"empty-output"],
+    [{status:"failed",error:{message:"SECRET PROVIDER TEXT"}},"provider-error"],
+  ] as const;
+  for (const [body,stage] of cases) {
+    let diagnostic: any; let calls=0;
+    await assert.rejects(()=>createMetaAdapter(async()=>{calls++;return Response.json(body);})({
+      image:new Uint8Array([1]),question:"synthetic",apiKey:"SYNTHETIC_KEY",onDiagnostic:d=>{diagnostic=d;},
+    }));
+    assert.equal(diagnostic.stage,stage);
+    assert.equal(calls,1);
+    assert.equal(JSON.stringify(diagnostic).includes("SECRET PROVIDER TEXT"),false);
+    if(stage==="report-schema") assert.ok(diagnostic.issues.some((x:any)=>x.path==="findings.0.category"));
+    if(stage==="output-token-limit") assert.equal(diagnostic.reasoningTokens,1394);
+  }
+});
+
+test("validation persists safe failure reason and keeps reservation after malformed output",async()=>{
+  const dir=mkdtempSync(join(tmpdir(),"sw-validation-"));
+  try {
+    let calls=0;
+    const args={image:new Uint8Array([1]),apiKey:"SYNTHETIC_KEY",approval:approval(),reservationPath:join(dir,"reserved"),
+      infer:createMetaAdapter(async()=>{calls++;return Response.json({output_text:"{"});})};
+    const evidence=await validateOnce(args);
+    assert.equal(evidence.diagnostic?.stage,"report-json");
+    assert.equal(evidence.report,null);
+    await assert.rejects(()=>validateOnce(args));
+    assert.equal(calls,1);
+  } finally {rmSync(dir,{recursive:true,force:true});}
 });

@@ -5,6 +5,8 @@ import sharp from "sharp";
 import { createHash } from "node:crypto";
 import { checkApproval, validateOnce, CONSERVATIVE_ESTIMATE_USD, type ValidationApproval } from "../lib/server/validation";
 
+import { META_MAX_OUTPUT_TOKENS } from "../lib/server/meta";
+
 async function main() {
   const [mode, imagePath, approvalPath] = process.argv.slice(2);
   if (!imagePath || !((mode === "--prepare" && process.argv.length === 4) ||
@@ -23,7 +25,7 @@ async function main() {
     .flatten({ background: "#ffffff" }).jpeg({ quality: 85 }).toBuffer();
   if (mode === "--prepare") {
     console.log(JSON.stringify({ imageSha256: createHash("sha256").update(image).digest("hex"),
-      preparedBytes: image.length, maximumOutputTokens: 1800,
+      preparedBytes: image.length, maximumOutputTokens: META_MAX_OUTPUT_TOKENS,
       conservativeEstimateUsd: CONSERVATIVE_ESTIMATE_USD, networkRequests: 0 }));
     return;
   }
