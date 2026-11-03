@@ -133,6 +133,7 @@ export default function Page() {
         </p>
       </section>
       <p><a href="/vault">Private server snapshots</a> · Create → photograph → record observations → review → save → export.</p>
+      <section className="availability trace-entry"><strong>Evidence Trace: a genuine Muse Spark report, ready for review.</strong><p>Inspect the captured photograph and original AI observations, record your decisions, then save and export. No new inference.</p><a className="secondary" href="/evidence">Review captured AI report →</a></section>
       <ManualWorkspace legacyError={error} />
       <section hidden={!history.length && !error} aria-label="Previous inspections">
       <div className="legacy-workspace">

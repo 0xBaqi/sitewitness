@@ -1,0 +1,68 @@
+{
+  "id": "muse-spark-2026-11-03-attempt-2",
+  "mode": "captured-live-result",
+  "model": "muse-spark-1.3",
+  "generatedAt": "2026-11-03T00:58:56.444Z",
+  "imageSha256": "a2f25a2177b635c9ede4ad4882275e9611b3261a8d8c56295d18effc9396a85a",
+  "originalImageSha256": "88c42ce3c462425ef5969ae4ca9913c6302f59c7280ae80fc88538f8e3209ad9",
+  "imageWidth": 800,
+  "imageHeight": 600,
+  "httpStatus": 200,
+  "latencyMs": 18055,
+  "usage": {
+    "input_tokens": 1028,
+    "input_tokens_details": {
+      "cached_tokens": 0
+    },
+    "output_tokens": 1528,
+    "output_tokens_details": {
+      "reasoning_tokens": 959
+    },
+    "total_tokens": 2556
+  },
+  "estimatedUsd": 0.007779,
+  "billingVerified": false,
+  "report": {
+    "overview": "Photo shows ground-level column construction with timber formwork, exposed rebar cages, diagonal props, and low concrete strips on bare soil. Several workers and loose materials are present. Single viewpoint limits detail and hides interior and below-grade conditions.",
+    "findings": [
+      {
+        "id": "f1",
+        "category": "observation",
+        "title": "Timber column formwork with diagonal props",
+        "description": "Multiple tall box-like timber forms stand in a row, held by numerous angled props reaching to the ground. Horizontal timber cleats and small platforms are visible on the forms.",
+        "evidence": "Center of image shows vertical wooden board columns with cross-battens and diagonal pipe-like supports extending to soil.",
+        "limitation": "Interior of forms, alignment, tightness and prop fixity cannot be confirmed from this view; on-site check needed."
+      },
+      {
+        "id": "f2",
+        "category": "observation",
+        "title": "Exposed vertical reinforcement cages",
+        "description": "Tall vertical steel cages with horizontal ties rise from concrete bases, some without surrounding formwork and some partially enclosed by timber boards.",
+        "evidence": "Right side shows open lattice of vertical bars with ties, extending well above form tops against sky.",
+        "limitation": "Bar diameter, spacing, laps, cover and surface condition cannot be measured from photo; direct verification required."
+      },
+      {
+        "id": "f3",
+        "category": "needs_verification",
+        "title": "Low concrete strips and earthen work area",
+        "description": "Low concrete strips connect column bases across disturbed bare earth with scattered lumber, pipes, bucket, cans and stacked blocks nearby.",
+        "evidence": "Base line of light concrete on soil, plus loose materials and uneven ground visible in foreground and left side.",
+        "limitation": "Dimensions, depths, below-grade construction and soil nature are not visible; drawings and excavation checks needed."
+      },
+      {
+        "id": "f4",
+        "category": "observation",
+        "title": "Workers and general site context",
+        "description": "Several people in high-visibility vests and helmets stand among the columns. Background shows large trees and open sky in daylight.",
+        "evidence": "Four figures near formwork, trees to left, hazy sky; scattered construction debris on ground.",
+        "limitation": "Activities, roles and full site extent outside frame cannot be determined from single image alone."
+      }
+    ],
+    "unanswered_questions": [
+      "What are reinforcement details and concrete specifications for columns and beams?",
+      "What are foundation depths, soil conditions and layout dimensions?",
+      "What work stage is shown and what sequence follows this photo?"
+    ],
+    "notice": "Preliminary visual observations only. Requires professional verification; not an engineering certification."
+  }
+}

@@ -1,6 +1,12 @@
-# SiteWitness v0.5 — manual inspection workspace
+# SiteWitness — captured Evidence Trace and manual inspections
 
-Create an inspection, add photographs, write human observations, record notes and review decisions, save, reopen, and export. AI analysis is unavailable and locked off; manual observations are never represented as AI findings.
+Open **Evidence Trace** at `/evidence` to review the genuine captured Muse Spark 1.3 result from 3 November 2026. Choose the built-in sample or select the exact original/prepared photograph, inspect four observations and three questions, record separate human edits/decisions/answers, save/reopen with the photograph in this browser, and export the complete record. Every screen identifies this as a captured result with no new inference. Other photographs remain manual-only.
+
+The original AI report is unchanged. An AI-assisted audit is labeled separately from human review. All human decisions begin unreviewed; reviewer identity is self-declared, and exports are preliminary, not signed engineering reports. No SAM localization exists. The captured review has a separate browser database and cannot be uploaded to the manual-only private vault. Browser-profile access is not authentication; clearing browser data loses saved reviews. Export a backup.
+
+See [visual evidence audit](docs/captured-evidence-audit.md), [SAM documentation investigation](docs/sam-feasibility.md), [Baronal V2](docs/baronal-v2.md), and [release evidence](docs/captured-release-readiness.md).
+
+Manual inspection remains available: create an inspection, add photographs, write human observations, record notes and decisions, save, reopen, and export. Public live analysis remains locked off; manual observations are never represented as AI findings.
 
 ## Run locally
 
@@ -27,7 +33,7 @@ npm audit
 git diff --check
 ```
 
-Browser tests require an installed Playwright Chromium browser and its system libraries. All fixtures are clearly labeled synthetic. Browser traffic to external hosts/analysis is blocked; backend HTTP uses injected stubs. Tests do not establish real model availability or quality.
+Browser tests require an installed Playwright Chromium browser and its system libraries. Synthetic fixtures and synthetic reviewer inputs are explicitly labeled; the captured workflow test uses the genuine saved report and photograph. Browser traffic to external hosts/analysis is blocked; backend HTTP uses injected stubs. Tests do not establish real model availability or quality.
 
 ## Persistence and provenance
 
@@ -38,7 +44,7 @@ Browser tests require an installed Playwright Chromium browser and its system li
 
 [v0.5 workflow, architecture assessment, and production blockers](docs/v0.5-readiness.md) · [Historical v0.4 controls](docs/v0.4-readiness.md) · [Evaluation plan](docs/evaluation-plan.md)
 
-No SAM masks, live model results, deployment, or cross-device sync are claimed. Human observations and review decisions are not engineering certifications.
+One genuine captured Muse result is available for the exact sample photograph. No SAM masks, general live inference, deployment of this change, or cross-device sync for captured reviews are claimed. Human observations and review decisions are not engineering certifications.
 
 ## Deployment readiness (v0.7)
 
