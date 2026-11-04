@@ -36,10 +36,13 @@ beforeEach(async()=>{
  await engine.exec(readFileSync("deploy/migrations/009-neon.sql","utf8"));
  await engine.exec(readFileSync("deploy/migrations/010-neon-inference-budget.sql","utf8"));
  await engine.exec("TRUNCATE sw_counters,sw_counter_imports");
+ await engine.query("UPDATE sw_inference_epochs SET global_daily_limit=4,per_identity_daily_limit=2,lifetime_limit=5 WHERE id='judge-v1-legacy-unknown'");
 });
-test("Neon inference budget requires the migrated lifetime counter and never lowers it",async()=>{
+test("unknown legacy history is isolated and preserved while the finite new epoch reserves",async()=>{
  const store=factory();
- await assert.rejects(()=>store.reserveAnalysis("judge_a",2,4,5,now),{status:503});
+ await store.reserveAnalysis("judge_a",2,4,5,now);
+ const epochRow=(await engine.query("SELECT legacy_lifetime_state FROM sw_inference_epochs WHERE id='judge-v1-legacy-unknown'")).rows[0] as {legacy_lifetime_state:string};
+ assert.equal(epochRow.legacy_lifetime_state,"unknown");
  const source="1".repeat(64),counters=[
   {name:"analysis-attempts",count:59,until:now+60000},
   {name:"analysis-decodes",count:9,until:now+3600000},
@@ -56,7 +59,8 @@ test("Neon inference budget requires the migrated lifetime counter and never low
  assert.equal(Number(attempts[0].count),59);
  await store.consume("analysis-attempts",60,60000,now);
  await assert.rejects(()=>store.consume("analysis-attempts",60,60000,now),{status:429});
- await assert.rejects(()=>store.reserveAnalysis("judge_a",2,3,5,now),{status:429});
+ await store.reserveAnalysis("judge_a",2,4,5,now);
+ await assert.rejects(()=>store.reserveAnalysis("judge_a",2,4,5,now),{status:429});
  const unchanged=(await engine.query("SELECT count FROM sw_counters WHERE name='inference-lifetime'")).rows as {count:number}[];
  assert.equal(Number(unchanged[0].count),4);
 });
@@ -71,15 +75,23 @@ test("serverless analyze authenticates per-person bearer tokens and atomically p
  assert.equal(replies.filter(r=>r.status===429).length,4);
  assert.equal(calls,2);
  const counters=(await engine.query("SELECT name,count FROM sw_counters ORDER BY name")).rows as {name:string;count:number}[];
- assert.equal(Number(counters.find(r=>r.name.startsWith("analysis-user-"))?.count),2);
- assert.equal(Number(counters.find(r=>r.name.startsWith("analysis-daily-"))?.count),2);
- assert.equal(Number(counters.find(r=>r.name==="inference-lifetime")?.count),4);
+ assert.equal(Number(counters.find(r=>r.name.includes("-identity-judge_a-"))?.count),2);
+ assert.equal(Number(counters.find(r=>r.name.includes("-daily-2026-11-03"))?.count),2);
+ assert.equal(Number(counters.find(r=>r.name==="inference-lifetime")?.count),2);
  const afterRestart=await handler(await request());assert.equal(afterRestart.status,429);
+});
+
+test("serverless deployment origin follows its exact Vercel Preview hostname",async()=>{
+ const dynamicEnv=()=>({...env(),VERCEL_URL:"sitewitness-preview.vercel.app"});
+ const handler=createAnalyzeHandler({env:dynamicEnv,store:factory,now:()=>now,infer:async()=>report});
+ assert.equal((await handler(await request({origin:"https://sitewitness-preview.vercel.app"}))).status,200);
+ assert.equal((await handler(await request({origin:"https://another-preview.vercel.app"}))).status,403);
 });
 
 test("public same-origin requests need no token and retain atomic per-IP and lifetime allowances",async()=>{
  await seed(0,"8".repeat(64));
  const publicEnv=()=>({...env(),SITEWITNESS_PUBLIC_ANALYSIS:"true",SITEWITNESS_STORAGE_KEY:"9".repeat(64),INFERENCE_IP_DAILY_LIMIT:"1"});
+ await engine.query("UPDATE sw_inference_epochs SET per_identity_daily_limit=1 WHERE id='judge-v1-legacy-unknown'");
  let calls=0;const handler=createAnalyzeHandler({env:publicEnv,store:factory,now:()=>now,infer:async()=>{calls++;return report;}});
  const publicRequest=async(ip:string)=>{const req=await request();req.headers.delete("authorization");req.headers.set("x-forwarded-for",ip);return handler(req);};
  const sameIp=await Promise.all([publicRequest("203.0.113.7"),publicRequest("203.0.113.7"),publicRequest("203.0.113.7")]);
@@ -88,9 +100,9 @@ test("public same-origin requests need no token and retain atomic per-IP and lif
  assert.equal((await publicRequest("203.0.113.8")).status,200);
  assert.equal(calls,2);
  const counters=(await engine.query("SELECT name,count FROM sw_counters ORDER BY name")).rows as {name:string;count:number}[];
- assert.equal(Number(counters.find(r=>r.name==="inference-lifetime")?.count),2);
- assert.equal(Number(counters.find(r=>r.name.startsWith("analysis-daily-"))?.count),2);
- assert.equal(Number(counters.filter(r=>r.name.startsWith("analysis-user-ip_")).length),2);
+ assert.equal(Number(counters.find(r=>r.name==="inference-lifetime")?.count),0);
+ assert.equal(Number(counters.find(r=>r.name.includes("-daily-2026-11-03"))?.count),2);
+ assert.equal(Number(counters.filter(r=>r.name.includes("-identity-ip_")).length),2);
  assert.equal((await publicRequest("203.0.113.8")).status,429);
  assert.equal((await publicRequest("not-an-ip")).status,503);
  const cross=await request();cross.headers.delete("authorization");cross.headers.set("origin","https://attacker.invalid");cross.headers.set("x-forwarded-for","203.0.113.9");
@@ -99,11 +111,15 @@ test("public same-origin requests need no token and retain atomic per-IP and lif
 });
 
 test("Neon reservation enforces the configured lifetime ceiling",async()=>{
- await seed(4,"6".repeat(64));
+ await engine.query("UPDATE sw_inference_epochs SET global_daily_limit=10 WHERE id='judge-v1-legacy-unknown'");
  const store=factory();
- await store.reserveAnalysis("judge_a",2,4,5,now);
- await assert.rejects(()=>store.reserveAnalysis("judge_a",2,4,5,now),{status:429});
- const lifetime=(await engine.query("SELECT count FROM sw_counters WHERE name='inference-lifetime'")).rows[0] as {count:number};
+ await store.reserveAnalysis("judge_a",2,10,5,now);
+ await store.reserveAnalysis("judge_b",2,10,5,now);
+ await store.reserveAnalysis("judge_c",2,10,5,now);
+ await store.reserveAnalysis("judge_d",2,10,5,now);
+ await store.reserveAnalysis("judge_e",2,10,5,now);
+ await assert.rejects(()=>store.reserveAnalysis("judge_f",2,10,5,now),{status:429});
+ const lifetime=(await engine.query("SELECT count FROM sw_counters WHERE name='inference-epoch-judge-v1-legacy-unknown-lifetime'")).rows[0] as {count:number};
  assert.equal(Number(lifetime.count),5);
 });
 
@@ -113,13 +129,14 @@ test("serverless validation and upstream failures do not refund reserved inferen
  const wrongMime=await handler(await request({type:"text/plain"}));assert.equal(wrongMime.status,415);
  const malformed=await handler(new Request("https://sitewitness.example/api/analyze",{method:"POST",headers:{authorization:`Bearer ${token}`,origin:"https://sitewitness.example","content-type":"multipart/form-data; boundary=X"},body:"broken"}));assert.equal(malformed.status,400);
  const image=await request();const failed=await handler(image);assert.equal(failed.status,500);assert.equal(calls,1);
- const result=(await engine.query("SELECT count FROM sw_counters WHERE name='inference-lifetime'")).rows[0] as {count:number};
- assert.equal(Number(result.count),5);
- const exhausted=await handler(await request());assert.equal(exhausted.status,429);assert.equal(calls,1);
+ const result=(await engine.query("SELECT count FROM sw_counters WHERE name='inference-lifetime'")).rows[0] as {count:number}|undefined;
+ assert.equal(Number(result?.count),4);
+ const secondFailure=await handler(await request());assert.equal(secondFailure.status,500);assert.equal(calls,2);
+ const exhausted=await handler(await request());assert.equal(exhausted.status,429);assert.equal(calls,2);
 });
 
 test("serverless budget dry-run validates and persists allowances without invoking Meta",async()=>{
- await seed(1,"5".repeat(64));let calls=0;
+ let calls=0;
  const dryEnv=()=>({...env(),INFERENCE_ENABLED:"false",INFERENCE_BUDGET_DRY_RUN:"true",MODEL_API_KEY:""});
  const handler=createAnalyzeHandler({env:dryEnv,store:factory,now:()=>now,infer:async()=>{calls++;return report;}});
  const first=await handler(await request());assert.equal(first.status,503);
@@ -127,6 +144,6 @@ test("serverless budget dry-run validates and persists allowances without invoki
  const second=await handler(await request());assert.equal(second.status,503);
  const exhausted=await handler(await request());assert.equal(exhausted.status,429);
  assert.equal(calls,0);
- const lifetime=(await engine.query("SELECT count FROM sw_counters WHERE name='inference-lifetime'")).rows as {count:number}[];
- assert.equal(Number(lifetime[0].count),3);
+ const lifetime=(await engine.query("SELECT count FROM sw_counters WHERE name='inference-epoch-judge-v1-legacy-unknown-lifetime'")).rows as {count:number}[];
+ assert.equal(Number(lifetime[0].count),2);
 });

@@ -33,14 +33,16 @@ export class NeonInferenceBudget {
    throw new ServiceError(503,"Usage protection is unavailable.");
   const date=new Date(now),day=date.toISOString().slice(0,10),nextMidnight=Date.UTC(date.getUTCFullYear(),date.getUTCMonth(),date.getUTCDate()+1);
   return this.locked(async sql=>{
-   const imported=await sql.query("SELECT 1 FROM sw_counter_imports WHERE name='inference-lifetime' LIMIT 1");
-   const current=await sql.query("SELECT count FROM sw_counters WHERE name='inference-lifetime' FOR UPDATE");
-   if(imported.rows.length!==1||current.rows.length!==1)
-    throw new ServiceError(503,"Lifetime inference allowance has not been migrated from its authoritative store.");
-   // One transaction and one cross-instance lock reserve all ceilings together.
-   await this.increment(sql,`analysis-user-${userId}-${day}`,userDaily,nextMidnight,now);
-   await this.increment(sql,`analysis-daily-${day}`,globalDaily,nextMidnight,now);
-   await this.increment(sql,"inference-lifetime",lifetime,maxCounter,now);
+   const result=await sql.query("SELECT id,legacy_lifetime_state,global_daily_limit,per_identity_daily_limit,lifetime_limit FROM sw_inference_epochs WHERE id='judge-v1-legacy-unknown' FOR UPDATE");
+   const epoch=result.rows[0] as {id:string;legacy_lifetime_state:string;global_daily_limit:unknown;per_identity_daily_limit:unknown;lifetime_limit:unknown}|undefined;
+   if(!epoch||epoch.legacy_lifetime_state!=="unknown"||Number(epoch.global_daily_limit)!==globalDaily||Number(epoch.per_identity_daily_limit)!==userDaily||Number(epoch.lifetime_limit)!==lifetime)
+    throw new ServiceError(503,"Inference budget epoch is missing or mismatched.");
+   // New epoch keys preserve every prior counter, including any prior lifetime row.
+   // Lock and reserve every ceiling together so concurrent instances cannot overspend.
+   const prefix=`inference-epoch-${epoch.id}`;
+   await this.increment(sql,`${prefix}-identity-${userId}-${day}`,userDaily,nextMidnight,now);
+   await this.increment(sql,`${prefix}-daily-${day}`,globalDaily,nextMidnight,now);
+   await this.increment(sql,`${prefix}-lifetime`,lifetime,maxCounter,now);
   });
  }
 

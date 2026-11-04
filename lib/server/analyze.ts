@@ -25,6 +25,7 @@ type Environment = {
   INFERENCE_DAILY_LIMIT?: string;
   INFERENCE_CALL_LIMIT?: string;
   VERCEL?: string;
+  VERCEL_URL?: string;
 };
 type AnalysisStore = Pick<LocalStore,"consume"|"reserveAnalysis"> & {close():void|Promise<void>};
 export function createAnalyzeHandler(
@@ -68,7 +69,11 @@ export function createAnalyzeHandler(
       const origin = request.headers.get("origin");
       let expectedOrigin:string;
       if(serverless){
-        try{const parsed=new URL(config.SITEWITNESS_PUBLIC_ORIGIN??"");if(parsed.protocol!=="https:"||parsed.origin!==config.SITEWITNESS_PUBLIC_ORIGIN)throw new Error();expectedOrigin=parsed.origin;}
+        try{
+          const deploymentHost=config.VERCEL_URL??"";
+          if(deploymentHost){if(!/^[a-z0-9][a-z0-9.-]*\.vercel\.app$/i.test(deploymentHost))throw new Error();expectedOrigin=`https://${deploymentHost}`;}
+          else{const parsed=new URL(config.SITEWITNESS_PUBLIC_ORIGIN??"");if(parsed.protocol!=="https:"||parsed.origin!==config.SITEWITNESS_PUBLIC_ORIGIN)throw new Error();expectedOrigin=parsed.origin;}
+        }
         catch{throw new ServiceError(503,"Public origin is not configured.");}
       } else expectedOrigin=new URL(request.url).origin;
       if ((serverless && !origin) || (origin && origin !== expectedOrigin))
