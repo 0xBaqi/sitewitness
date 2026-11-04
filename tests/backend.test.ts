@@ -44,22 +44,26 @@ async function upload(
     bytes?: Uint8Array;
     type?: string;
     question?: string;
+    context?: string;
+    photoCount?: number;
     access?: string;
     duplicate?: boolean;
   } = {},
 ) {
   const form = new FormData();
-  form.append(
+  const bytes=Buffer.from(options.bytes ?? (await png()));
+  for(let i=0;i<(options.photoCount??1);i++)form.append(
     "photo",
-    new Blob([Buffer.from(options.bytes ?? (await png()))], {
+    new Blob([bytes], {
       type: options.type ?? "image/png",
     }),
-    "SYNTHETIC_TEST_DATA.png",
+    `SYNTHETIC_TEST_DATA-${i+1}.png`,
   );
   form.append(
     "question",
     options.question ?? "SYNTHETIC TEST DATA: describe visible content",
   );
+  if(options.context!==undefined)form.append("context",options.context);
   if (options.duplicate) form.append("question", "duplicate");
   return new Request("http://localhost/api/analyze", {
     method: "POST",
@@ -136,8 +140,8 @@ test("valid image decoded and metadata-free JPEG reaches typed adapter", async (
   const post = createAnalyzeHandler({
     env,
     infer: async (input) => {
-      assert.equal((await sharp(input.image).metadata()).format, "jpeg");
-      assert.equal((await sharp(input.image).metadata()).exif, undefined);
+      assert.equal((await sharp(input.images![0]).metadata()).format, "jpeg");
+      assert.equal((await sharp(input.images![0]).metadata()).exif, undefined);
       return report;
     },
   });
@@ -148,6 +152,18 @@ test("valid image decoded and metadata-free JPEG reaches typed adapter", async (
     JSON.stringify(await response.json()).includes(env().MODEL_API_KEY),
     false,
   );
+});
+test("realistic site details stay in bounded context while the visible question validates separately and five-photo inputs use one inference", async()=>{
+  const context=["Site/project: Riverside frame", "Location: Lagos", "Human summary: Concrete columns are visible.", "Human notes: West elevation viewed from ground level. The crew reported that the north stair core was poured yesterday; rebar and joint details require on-site verification.", "Existing human observations: formwork remains at third level"].join("\n").repeat(4);
+  let calls=0;
+  const post=createAnalyzeHandler({env,infer:async input=>{
+    calls++;assert.equal(input.question,"Check whether the exposed masonry joints need follow-up before the next lift.");
+    assert.ok(input.context!.length>500&&input.context!.length<=2000);assert.match(input.context!,/West elevation/);
+    assert.equal(input.images!.length,5);return report;
+  }});
+  const response=await post(await upload({question:"Check whether the exposed masonry joints need follow-up before the next lift.",context,photoCount:5}));
+  assert.equal(response.status,200);assert.equal(calls,1);
+  const result=await response.json() as {photos:string[]};assert.equal(result.photos.length,5);assert.ok(result.photos.every(hash=>/^[a-f0-9]{64}$/.test(hash)));
 });
 test("analysis quota ignores forged IP and resets by window", async () => {
   let time = 0;

@@ -62,7 +62,7 @@ test("approval cannot be reused for a different image and does not reserve or ca
     assert.equal(calls,0); assert.equal(existsSync(reservationPath),false);
   } finally {rmSync(dir,{recursive:true,force:true});}
 });
-test("real adapter sends one image, bounded output, no tools and never retries a rejection", async () => {
+test("real adapter sends multiple images in one bounded request, keeps question and context distinct, and never retries a rejection", async () => {
   let calls=0;
   const adapter=createMetaAdapter(async (_url,options) => {
     calls++;
@@ -70,12 +70,14 @@ test("real adapter sends one image, bounded output, no tools and never retries a
     assert.equal(body.max_output_tokens,6000);
     assert.equal(body.model,"muse-spark-1.3");
     assert.equal(body.input.length,1);
-    assert.equal(body.input[0].content.filter((x: {type:string})=>x.type==="input_image").length,1);
+    const content=body.input[0].content;
+    assert.equal(content.filter((x: {type:string})=>x.type==="input_image").length,2);
+    assert.match(content[0].text,/visible question/);assert.match(content[0].text,/bounded site context/);
     assert.equal(body.tools,undefined); assert.equal(body.background,undefined);
     assert.equal(options?.redirect,"error");
     return Response.json({}, {status:429});
   });
-  await assert.rejects(()=>adapter({image:new Uint8Array([1]),question:"synthetic",apiKey:"synthetic"}));
+  await assert.rejects(()=>adapter({images:[new Uint8Array([1]),new Uint8Array([2])],question:"visible question",context:"bounded site context",apiKey:"synthetic"}));
   assert.equal(calls,1);
 });
 

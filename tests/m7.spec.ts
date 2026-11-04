@@ -3,32 +3,37 @@ import sharp from "sharp";
 
 test("single inspection flow keeps human observations and fresh suggestions together through save, reopen and PDF", async ({page})=>{
  let requests=0;
+ const humanNotes="SYNTHETIC TEST DATA: initial field note. "+"The west elevation was viewed from the ground; confirm the sequence and inspect the north stair core during the next visit. ".repeat(4);
  await page.route("**/api/analyze",async route=>{
   requests++;
+  const payload=route.request().postData()??"";
+  expect(payload).toContain("SYNTHETIC TEST DATA: inspect visible members");
+  expect(payload).toContain("Human notes: SYNTHETIC TEST DATA: initial field note.");
+  expect((payload.match(/name=\"photo\"/g)??[]).length).toBe(2);
   expect(route.request().headers().authorization).toBeUndefined();
   expect(route.request().headers().origin).toMatch(/^https?:\/\//);
-  return route.fulfill({json:{model:"muse-spark-1.3",timestamp:"2026-11-04T00:00:00.000Z",report:{overview:"SYNTHETIC TEST DATA: a test suggestion, not real inference.",findings:[{id:"test-finding",category:"observation",title:"SYNTHETIC TEST DATA: visible member",description:"SYNTHETIC TEST DATA: test description.",evidence:"SYNTHETIC TEST DATA: test pixels.",limitation:"SYNTHETIC TEST DATA: requires site verification."}],unanswered_questions:["SYNTHETIC TEST DATA: check drawing."],notice:"SYNTHETIC TEST DATA: not engineering certification."}}});
+  return route.fulfill({json:{model:"muse-spark-1.3",timestamp:"2026-11-04T00:00:00.000Z",photos:["a".repeat(64),"b".repeat(64)],report:{overview:"SYNTHETIC TEST DATA: a test suggestion, not real inference.",findings:[{id:"test-finding",category:"observation",title:"SYNTHETIC TEST DATA: visible member",description:"SYNTHETIC TEST DATA: test description.",evidence:"SYNTHETIC TEST DATA: test pixels.",limitation:"SYNTHETIC TEST DATA: requires site verification."}],unanswered_questions:["SYNTHETIC TEST DATA: check drawing."],notice:"SYNTHETIC TEST DATA: not engineering certification."}}});
  });
  await page.goto("/");
  await expect(page.getByRole("link",{name:/Analyze a site photograph/})).toHaveCount(0);
  await expect(page.getByLabel(/access code|bearer token|account/i)).toHaveCount(0);
  await expect(page.getByText(/Optional example · previously generated Meta report/)).toBeVisible();
  expect(requests).toBe(0);
- await page.getByRole("button",{name:"New inspection"}).click();
+ await expect(page.getByRole("button",{name:"New inspection"})).toBeEnabled();await page.getByRole("button",{name:"New inspection"}).click();
  await page.getByLabel("Site or project name").fill("SYNTHETIC TEST DATA: field site");
  await page.getByLabel("Site location").fill("SYNTHETIC TEST DATA: test location");
  await page.getByLabel("Inspection title or question").fill("SYNTHETIC TEST DATA: inspect visible members");
- await page.getByLabel("Human inspection summary").fill("SYNTHETIC TEST DATA: human site summary.");
- await page.getByLabel("Human notes").fill("SYNTHETIC TEST DATA: initial field note.");
+ await page.getByLabel("Human inspection summary").fill("SYNTHETIC TEST DATA: human site summary. "+"Visible columns, temporary formwork, west elevation, and site access observations. ".repeat(8));
+ await page.getByLabel("Human notes").fill(humanNotes);
  await page.getByRole("button",{name:"Add human observation"}).click();
  await page.getByLabel("Observation title").fill("SYNTHETIC TEST DATA: human observation");
  await page.getByLabel("Observation description").fill("SYNTHETIC TEST DATA: human entered description.");
  await page.getByLabel("Evidence noted").fill("SYNTHETIC TEST DATA: human entered evidence.");
  const photo=await sharp({create:{width:32,height:24,channels:3,background:"#456789"}}).jpeg().toBuffer();
- await page.getByLabel("Add construction photographs").setInputFiles({name:"synthetic-test.jpg",mimeType:"image/jpeg",buffer:photo});
+ await page.getByLabel("Add construction photographs").setInputFiles([{name:"synthetic-test.jpg",mimeType:"image/jpeg",buffer:photo},{name:"synthetic-test-detail.jpg",mimeType:"image/jpeg",buffer:photo}]);
  await expect(page.getByRole("img",{name:"Inspection photograph: synthetic-test.jpg"})).toBeVisible();
  expect(requests).toBe(0);
- await page.getByRole("button",{name:"Analyze with Meta Muse Spark"}).click();
+ await page.getByRole("button",{name:"Analyze all photographs with Meta Muse Spark"}).click();
  await expect(page.getByText(/Fresh muse-spark-1.3 suggestions added/)).toBeVisible();
  expect(requests).toBe(1);
  await expect(page.getByRole("button",{name:/Human · SYNTHETIC TEST DATA: human observation/})).toBeVisible();
@@ -41,7 +46,7 @@ test("single inspection flow keeps human observations and fresh suggestions toge
  await expect(page.getByText(/Inspection saved in this browser/)).toBeVisible();
  await page.reload();
  await page.getByRole("button",{name:/SYNTHETIC TEST DATA: inspect visible members/}).last().click();
- await expect(page.getByLabel("Human notes")).toHaveValue("SYNTHETIC TEST DATA: initial field note.");
+ await expect(page.getByLabel("Human notes")).toHaveValue(humanNotes);
  await expect(page.getByLabel("Observation description")).toHaveValue("SYNTHETIC TEST DATA: human entered description.");
  await page.getByRole("button",{name:/Muse Spark · SYNTHETIC TEST DATA: reviewed title/}).click();
  await expect(page.getByLabel("Suggested title")).toHaveValue("SYNTHETIC TEST DATA: reviewed title");
@@ -52,20 +57,20 @@ test("single inspection flow keeps human observations and fresh suggestions toge
  await expect(page.locator(".print-report")).toBeVisible();
  await expect(page.locator(".print-report")).toContainText("SYNTHETIC TEST DATA: human observation");
  await expect(page.locator(".print-report")).toContainText("SYNTHETIC TEST DATA: edited after review.");
- await expect(page.locator(".print-report img")).toBeVisible();
+ await expect(page.locator(".print-report img")).toHaveCount(2);
 });
 
 test("mobile inspection accepts a new photo, adds suggestions and reopens a printable report",async({page})=>{
  await page.setViewportSize({width:390,height:844});
- await page.route("**/api/analyze",route=>route.fulfill({json:{model:"muse-spark-1.3",timestamp:"2026-11-04T00:00:00.000Z",report:{overview:"SYNTHETIC TEST DATA: mobile test suggestion.",findings:[{id:"mobile-finding",category:"needs_verification",title:"SYNTHETIC TEST DATA: verify visible detail",description:"SYNTHETIC TEST DATA: test response only.",evidence:"SYNTHETIC TEST DATA: no genuine inference occurred.",limitation:"SYNTHETIC TEST DATA: check the source photograph."}],unanswered_questions:[],notice:"SYNTHETIC TEST DATA: not engineering certification."}}}));
- await page.goto("/");await page.getByRole("button",{name:"New inspection"}).click();
+ await page.route("**/api/analyze",route=>route.fulfill({json:{model:"muse-spark-1.3",timestamp:"2026-11-04T00:00:00.000Z",photos:["c".repeat(64)],report:{overview:"SYNTHETIC TEST DATA: mobile test suggestion.",findings:[{id:"mobile-finding",category:"needs_verification",title:"SYNTHETIC TEST DATA: verify visible detail",description:"SYNTHETIC TEST DATA: test response only.",evidence:"SYNTHETIC TEST DATA: no genuine inference occurred.",limitation:"SYNTHETIC TEST DATA: check the source photograph."}],unanswered_questions:[],notice:"SYNTHETIC TEST DATA: not engineering certification."}}}));
+ await page.goto("/");await expect(page.getByRole("button",{name:"New inspection"})).toBeEnabled();await page.getByRole("button",{name:"New inspection"}).click();
  await page.getByLabel("Inspection title or question").fill("SYNTHETIC TEST DATA: mobile inspection");
  await page.getByRole("button",{name:"Add human observation"}).click();
  await page.getByLabel("Observation title").fill("SYNTHETIC TEST DATA: human mobile note");
  await page.getByLabel("Observation description").fill("SYNTHETIC TEST DATA: entered on mobile.");
  const photo=await sharp({create:{width:24,height:18,channels:3,background:"#654321"}}).png().toBuffer();
  await page.getByLabel("Add construction photographs").setInputFiles({name:"synthetic-mobile.png",mimeType:"image/png",buffer:photo});
- await page.getByRole("button",{name:"Analyze with Meta Muse Spark"}).click();
+ await page.getByRole("button",{name:"Analyze all photographs with Meta Muse Spark"}).click();
  await expect(page.getByText(/Fresh muse-spark-1.3 suggestions added/)).toBeVisible();
  await page.getByRole("button",{name:"Save inspection",exact:true}).click();await expect(page.getByText(/Inspection saved in this browser/)).toBeVisible();
  const mobileWidth=await page.evaluate(()=>({fits:document.documentElement.scrollWidth<=innerWidth,scroll:document.documentElement.scrollWidth,body:document.body.scrollWidth,inner:innerWidth,offenders:Array.from(document.querySelectorAll<HTMLElement>("body *")).filter(el=>el.scrollWidth>el.clientWidth+1).slice(0,12).map(el=>({tag:el.tagName,className:typeof el.className==="string"?el.className:"",client:el.clientWidth,scroll:el.scrollWidth,left:el.getBoundingClientRect().left,right:el.getBoundingClientRect().right,text:el.innerText.slice(0,90)}))}));
@@ -75,4 +80,21 @@ test("mobile inspection accepts a new photo, adds suggestions and reopens a prin
  await expect(page.getByRole("button",{name:/Muse Spark · SYNTHETIC TEST DATA: verify visible detail/})).toBeVisible();
  await page.getByRole("button",{name:"Print / save PDF"}).click();await page.emulateMedia({media:"print"});
  await expect(page.locator(".print-report")).toContainText("SYNTHETIC TEST DATA: mobile inspection");
+});
+
+test("analysis errors stay with the draft, clear on correction, and retry only after another click",async({page})=>{
+ let calls=0;
+ await page.route("**/api/analyze",async route=>{
+  calls++;
+  if(calls===1)return route.fulfill({status:400,json:{error:"SYNTHETIC TEST DATA: correct the inspection question."}});
+  return route.fulfill({json:{model:"muse-spark-1.3",timestamp:"2026-11-04T00:00:00.000Z",photos:["d".repeat(64)],report:{overview:"SYNTHETIC TEST DATA: retry response.",findings:[],unanswered_questions:[],notice:"SYNTHETIC TEST DATA: verify on site."}}});
+ });
+ await page.goto("/");await expect(page.getByRole("button",{name:"New inspection"})).toBeEnabled();await page.getByRole("button",{name:"New inspection"}).click();
+ await page.getByLabel("Inspection title or question").fill("SYNTHETIC TEST DATA: first valid question");
+ const photo=await sharp({create:{width:20,height:20,channels:3,background:"#abcdef"}}).jpeg().toBuffer();
+ await page.getByLabel("Add construction photographs").setInputFiles({name:"synthetic-retry.jpg",mimeType:"image/jpeg",buffer:photo});
+ await page.getByRole("button",{name:"Analyze all photographs with Meta Muse Spark"}).click();
+ await expect(page.locator(".error[role=alert]")).toContainText("correct the inspection question");await expect(page.getByLabel("Inspection title or question")).toHaveValue("SYNTHETIC TEST DATA: first valid question");expect(calls).toBe(1);
+ await page.getByLabel("Inspection title or question").fill("SYNTHETIC TEST DATA: corrected question");await expect(page.locator(".error[role=alert]")).toHaveCount(0);expect(calls).toBe(1);
+ await page.getByRole("button",{name:"Analyze all photographs with Meta Muse Spark"}).click();await expect(page.getByText(/Fresh muse-spark-1.3 suggestions added/)).toBeVisible();expect(calls).toBe(2);
 });

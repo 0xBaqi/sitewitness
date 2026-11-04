@@ -131,18 +131,21 @@ export function createAnalyzeHandler(
         throw new ServiceError(400, "Malformed or incomplete upload.");
       }
       if (
-        form.getAll("photo").length !== 1 ||
+        form.getAll("photo").length < 1 || form.getAll("photo").length > 5 ||
         form.getAll("question").length !== 1 ||
-        [...form.keys()].some((key) => !["photo", "question"].includes(key))
+        form.getAll("context").length > 1 ||
+        [...form.keys()].some((key) => !["photo", "question", "context"].includes(key))
       )
         throw new ServiceError(
           400,
-          "Provide exactly one photograph and one question.",
+          "Provide one to five photographs and one inspection question.",
         );
-      const photo = form.get("photo");
+      const photos = form.getAll("photo");
       const question = form.get("question");
-      if (!(photo instanceof File))
+      const context = form.get("context");
+      if (photos.some(photo => !(photo instanceof File)))
         throw new ServiceError(400, "Photograph is required.");
+      const uploads = photos as File[];
       if (
         typeof question !== "string" ||
         !question.trim() ||
@@ -152,37 +155,29 @@ export function createAnalyzeHandler(
           400,
           "Enter an inspection question of 1–500 characters.",
         );
-      if (!photo.size || photo.size > imageLimit)
-        throw new ServiceError(413, "Image must be between 1 byte and 4 MB.");
+      if (context !== null && (typeof context !== "string" || context.length > 2000))
+        throw new ServiceError(400, "Site context must be 2,000 characters or fewer.");
+      if (uploads.some(photo => !photo.size || photo.size > imageLimit) || uploads.reduce((sum, photo) => sum + photo.size, 0) > imageLimit)
+        throw new ServiceError(413, "Selected photographs must total 4 MB or less for one analysis request.");
       const formats: Record<string, string> = {
         "image/jpeg": "jpeg",
         "image/png": "png",
         "image/webp": "webp",
       };
-      if (!formats[photo.type])
-        throw new ServiceError(415, "Use JPEG, PNG, or WebP.");
-      let image: Uint8Array;
-      try {
-        const bytes = Buffer.from(await photo.arrayBuffer());
-        const source = sharp(bytes, {
-          limitInputPixels: 24000000,
-          failOn: "warning",
-        });
-        const meta = await source.metadata();
-        if (meta.format !== formats[photo.type] || (meta.pages ?? 1) !== 1)
-          throw new Error("Unsupported image");
-        image = await source
-          .rotate()
-          .flatten({ background: "#ffffff" })
-          .jpeg({ quality: 90 })
-          .toBuffer();
-        if (image.length > imageLimit)
-          throw new Error("Decoded image is too large");
-      } catch {
-        throw new ServiceError(
-          415,
-          "Photograph could not be decoded. Use a non-animated JPEG, PNG, or WebP under 24 megapixels.",
-        );
+      const images: Uint8Array[] = [], photoHashes: string[] = [];
+      for (const photo of uploads) {
+        if (!formats[photo.type]) throw new ServiceError(415, "Use JPEG, PNG, or WebP.");
+        try {
+          const bytes = Buffer.from(await photo.arrayBuffer());
+          const source = sharp(bytes, { limitInputPixels: 24000000, failOn: "warning" });
+          const meta = await source.metadata();
+          if (meta.format !== formats[photo.type] || (meta.pages ?? 1) !== 1) throw new Error("Unsupported image");
+          const image = await source.rotate().flatten({ background: "#ffffff" }).jpeg({ quality: 90 }).toBuffer();
+          if (image.length > imageLimit) throw new Error("Decoded image is too large");
+          images.push(image); photoHashes.push(createHash("sha256").update(bytes).digest("hex"));
+        } catch {
+          throw new ServiceError(415, "A photograph could not be decoded. Use non-animated JPEG, PNG, or WebP under 24 megapixels.");
+        }
       }
       const limit = config.INFERENCE_DAILY_LIMIT ?? "0";
       if (!/^(0|[1-9][0-9]{0,4})$/.test(limit)) throw new ServiceError(503, "Inference budget is not configured.");
@@ -197,8 +192,9 @@ export function createAnalyzeHandler(
       if(budgetDryRun)
         throw new ServiceError(503,"Budget acceptance passed validation and reserved allowance. No model request was made.");
       const report = await infer({
-        image,
+        images,
         question: question.trim(),
+        context: typeof context === "string" ? context.trim() : "",
         apiKey: config.MODEL_API_KEY!,
       });
       return json({
@@ -206,6 +202,7 @@ export function createAnalyzeHandler(
         model: "muse-spark-1.3",
         provenance: { kind: "ai", model: "muse-spark-1.3" },
         timestamp: new Date(now()).toISOString(),
+        photos: photoHashes,
       });
     } catch (error) {
       if (error instanceof ServiceError)

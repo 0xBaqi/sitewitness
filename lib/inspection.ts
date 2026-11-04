@@ -9,7 +9,7 @@ export const provenanceSchema = z.discriminatedUnion("kind", [
 const reviewKeys = findingSchema.shape.id;
 export const reviewSchema = z.record(reviewKeys,z.enum(["unreviewed","accepted","rejected","investigate"]));
 export const notesSchema = z.record(reviewKeys,z.string().max(1000));
-const aiAnalysisSchema=z.object({model:z.string().max(100),generatedAt:z.string().datetime().nullable(),photoId:z.string().uuid().nullable(),imageSha256:z.string().regex(/^[a-f0-9]{64}$/i).nullable(),overview:z.string().max(1500),source:z.enum(["fresh","legacy"]) });
+const aiAnalysisSchema=z.object({model:z.string().max(100),generatedAt:z.string().datetime().nullable(),photoId:z.string().uuid().nullable(),imageSha256:z.string().regex(/^[a-f0-9]{64}$/i).nullable(),photoIds:z.array(z.string().uuid()).max(5).optional(),imageSha256s:z.array(z.string().regex(/^[a-f0-9]{64}$/i)).max(5).optional(),overview:z.string().max(1500),source:z.enum(["fresh","legacy"]) });
 export const savedSchema = z.object({
   id:z.string().min(1).max(100), date:z.string().max(100),
   question:z.string().max(500), filename:z.string().max(255),
@@ -45,7 +45,7 @@ export const manualSchema = savedSchema.extend({
   revision:z.number().int().nonnegative(),
 }).strict().refine(record => {
   const ids=new Set(record.report.findings.map(f=>f.id));
-  return record.report.findings.every(f=>f.title.trim() && f.description.trim()) && [record.reviews,record.edits??{},record.notes??{}].every(map=>Object.keys(map).every(id=>ids.has(id))) && record.aiFindingIds.every(id=>ids.has(id)) && (!record.aiAnalysis || (!record.aiAnalysis.photoId || record.photos.some(photo=>photo.id===record.aiAnalysis?.photoId)));
+  return record.report.findings.every(f=>f.title.trim() && f.description.trim()) && [record.reviews,record.edits??{},record.notes??{}].every(map=>Object.keys(map).every(id=>ids.has(id))) && record.aiFindingIds.every(id=>ids.has(id)) && (!record.aiAnalysis || [record.aiAnalysis.photoId,...(record.aiAnalysis.photoIds??[])].filter(Boolean).every(id=>record.photos.some(photo=>photo.id===id)));
 },"Review metadata must refer to an observation in this inspection");
 export type ManualInspection = z.infer<typeof manualSchema>;
 export const manualNotice = "Human-authored inspection. No AI analysis was performed. Observations require professional verification and are not engineering certifications.";
