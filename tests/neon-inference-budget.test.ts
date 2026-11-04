@@ -77,6 +77,27 @@ test("serverless analyze authenticates per-person bearer tokens and atomically p
  const afterRestart=await handler(await request());assert.equal(afterRestart.status,429);
 });
 
+test("public same-origin requests need no token and retain atomic per-IP and lifetime allowances",async()=>{
+ await seed(0,"8".repeat(64));
+ const publicEnv=()=>({...env(),SITEWITNESS_PUBLIC_ANALYSIS:"true",SITEWITNESS_STORAGE_KEY:"9".repeat(64),INFERENCE_IP_DAILY_LIMIT:"1"});
+ let calls=0;const handler=createAnalyzeHandler({env:publicEnv,store:factory,now:()=>now,infer:async()=>{calls++;return report;}});
+ const publicRequest=async(ip:string)=>{const req=await request();req.headers.delete("authorization");req.headers.set("x-forwarded-for",ip);return handler(req);};
+ const sameIp=await Promise.all([publicRequest("203.0.113.7"),publicRequest("203.0.113.7"),publicRequest("203.0.113.7")]);
+ assert.equal(sameIp.filter(r=>r.status===200).length,1);
+ assert.equal(sameIp.filter(r=>r.status===429).length,2);
+ assert.equal((await publicRequest("203.0.113.8")).status,200);
+ assert.equal(calls,2);
+ const counters=(await engine.query("SELECT name,count FROM sw_counters ORDER BY name")).rows as {name:string;count:number}[];
+ assert.equal(Number(counters.find(r=>r.name==="inference-lifetime")?.count),2);
+ assert.equal(Number(counters.find(r=>r.name.startsWith("analysis-daily-"))?.count),2);
+ assert.equal(Number(counters.filter(r=>r.name.startsWith("analysis-user-ip_")).length),2);
+ assert.equal((await publicRequest("203.0.113.8")).status,429);
+ assert.equal((await publicRequest("not-an-ip")).status,503);
+ const cross=await request();cross.headers.delete("authorization");cross.headers.set("origin","https://attacker.invalid");cross.headers.set("x-forwarded-for","203.0.113.9");
+ assert.equal((await handler(cross)).status,403);
+ assert.equal(calls,2);
+});
+
 test("Neon reservation enforces the configured lifetime ceiling",async()=>{
  await seed(4,"6".repeat(64));
  const store=factory();

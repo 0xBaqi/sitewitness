@@ -19,7 +19,7 @@ export const reportSchema = z.object({
   overview: z.string().max(1500),
   findings: z
     .array(findingSchema)
-    .max(12)
+    .max(24)
     .refine(
       (items) => new Set(items.map((item) => item.id)).size === items.length,
       "Duplicate finding ids",

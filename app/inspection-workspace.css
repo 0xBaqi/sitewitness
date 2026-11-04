@@ -1,0 +1,16 @@
+.manual-fields .photo-select {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+.manual-fields .photo-select input[type="radio"] {
+  display: inline-block;
+  width: auto;
+  flex: 0 0 auto;
+  margin: 0;
+}
+.inspection-workspace .ai-overview .hint {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}

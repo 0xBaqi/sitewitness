@@ -9,6 +9,7 @@ export const provenanceSchema = z.discriminatedUnion("kind", [
 const reviewKeys = findingSchema.shape.id;
 export const reviewSchema = z.record(reviewKeys,z.enum(["unreviewed","accepted","rejected","investigate"]));
 export const notesSchema = z.record(reviewKeys,z.string().max(1000));
+const aiAnalysisSchema=z.object({model:z.string().max(100),generatedAt:z.string().datetime().nullable(),photoId:z.string().uuid().nullable(),imageSha256:z.string().regex(/^[a-f0-9]{64}$/i).nullable(),overview:z.string().max(1500),source:z.enum(["fresh","legacy"]) });
 export const savedSchema = z.object({
   id:z.string().min(1).max(100), date:z.string().max(100),
   question:z.string().max(500), filename:z.string().max(255),
@@ -16,6 +17,11 @@ export const savedSchema = z.object({
   report:reportSchema, reviews:reviewSchema,
   edits:z.record(reviewKeys,z.string().max(1200)).optional(),
   notes:notesSchema.optional(),
+  siteName:z.string().max(200).optional(),
+  location:z.string().max(300).optional(),
+  inspectionNotes:z.string().max(3000).optional(),
+  aiFindingIds:z.array(reviewKeys).max(12).optional(),
+  aiAnalysis:aiAnalysisSchema.nullable().optional(),
 });
 export type Saved = z.infer<typeof savedSchema>;
 export function provenanceLabel(value: Saved["provenance"]) {
@@ -31,19 +37,22 @@ export const photoMetadataSchema = z.object({
 export const manualSchema = savedSchema.extend({
   id:z.string().uuid(), date:z.string().datetime(), question:z.string().trim().min(1).max(500),
   provenance:z.object({kind:z.literal("manual")}).strict(),
-  inspectionNotes:z.string().max(3000),
+  siteName:z.string().max(200).default(""), location:z.string().max(300).default(""),
+  inspectionNotes:z.string().max(3000).default(""),
+  aiFindingIds:z.array(reviewKeys).max(12).default([]),
+  aiAnalysis:aiAnalysisSchema.nullable().default(null),
   photos:z.array(photoMetadataSchema).max(5).refine(p=>new Set(p.map(x=>x.id)).size===p.length),
   revision:z.number().int().nonnegative(),
 }).strict().refine(record => {
   const ids=new Set(record.report.findings.map(f=>f.id));
-  return record.report.findings.every(f=>f.title.trim() && f.description.trim()) && [record.reviews,record.edits??{},record.notes??{}].every(map=>Object.keys(map).every(id=>ids.has(id)));
+  return record.report.findings.every(f=>f.title.trim() && f.description.trim()) && [record.reviews,record.edits??{},record.notes??{}].every(map=>Object.keys(map).every(id=>ids.has(id))) && record.aiFindingIds.every(id=>ids.has(id)) && (!record.aiAnalysis || (!record.aiAnalysis.photoId || record.photos.some(photo=>photo.id===record.aiAnalysis?.photoId)));
 },"Review metadata must refer to an observation in this inspection");
 export type ManualInspection = z.infer<typeof manualSchema>;
 export const manualNotice = "Human-authored inspection. No AI analysis was performed. Observations require professional verification and are not engineering certifications.";
 export function newManualInspection(): ManualInspection {
   return {id:crypto.randomUUID(),date:new Date().toISOString(),question:"",filename:"",
     provenance:{kind:"manual"},report:{overview:"",findings:[],unanswered_questions:[],notice:manualNotice},
-    reviews:{},edits:{},notes:{},inspectionNotes:"",photos:[],revision:0};
+    reviews:{},edits:{},notes:{},siteName:"",location:"",inspectionNotes:"",aiFindingIds:[],aiAnalysis:null,photos:[],revision:0};
 }
 // Public writes cannot claim model generation. Future AI records must originate from an authorized server path.
 export const manualServerRecordSchema = z.object({

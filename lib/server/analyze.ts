@@ -1,5 +1,6 @@
 import { LocalStore, openLocalStore } from "./store";
-import { createHash, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, timingSafeEqual } from "node:crypto";
+import { isIP } from "node:net";
 import sharp from "sharp";
 import { createMetaAdapter, type Inference } from "./meta";
 import { readBounded, ServiceError } from "./errors";
@@ -11,6 +12,8 @@ type Environment = {
   MODEL_API_KEY?: string;
   SITEWITNESS_ACCESS_CODE?: string;
   SITEWITNESS_USERS?: string;
+  SITEWITNESS_PUBLIC_ANALYSIS?: string;
+  SITEWITNESS_STORAGE_KEY?: string;
   SITEWITNESS_PUBLIC_ORIGIN?: string;
   SITEWITNESS_STORAGE_PROVIDER?: string;
   INSPECTION_STORAGE_ENABLED?: string;
@@ -18,6 +21,7 @@ type Environment = {
   INFERENCE_ENABLED?: string;
   INFERENCE_BUDGET_DRY_RUN?: string;
   INFERENCE_USER_DAILY_LIMIT?: string;
+  INFERENCE_IP_DAILY_LIMIT?: string;
   INFERENCE_DAILY_LIMIT?: string;
   INFERENCE_CALL_LIMIT?: string;
   VERCEL?: string;
@@ -48,6 +52,7 @@ export function createAnalyzeHandler(
     try {
       const config = env();
       const serverless = config.VERCEL === "1" || config.SITEWITNESS_STORAGE_PROVIDER === "neon-blob";
+      const publicAnalysis = serverless && config.SITEWITNESS_PUBLIC_ANALYSIS === "true";
       const inferenceEnabled=config.INFERENCE_ENABLED==="true",budgetDryRun=config.INFERENCE_BUDGET_DRY_RUN==="true";
       if(inferenceEnabled&&budgetDryRun)
         throw new ServiceError(503,"Conflicting inference modes are configured.");
@@ -73,7 +78,20 @@ export function createAnalyzeHandler(
       store = options.store?.() ?? (serverless?openNeonInferenceBudget(config):openLocalStore());
       store.consume("analysis-attempts", 60, 60000, now());
       let userId="local";
-      if(serverless){
+      if(serverless&&publicAnalysis){
+        if(!/^[a-f0-9]{64}$/i.test(config.SITEWITNESS_STORAGE_KEY??""))
+          throw new ServiceError(503,"Public analysis controls are not configured.");
+        // Vercel overwrites X-Forwarded-For at its edge. Store only an HMAC-derived
+        // identifier so durable per-address limits do not retain raw IP addresses.
+        const forwarded=request.headers.get("x-forwarded-for")?.split(",",1)[0]?.trim()??"";
+        if(!isIP(forwarded))throw new ServiceError(503,"Public request limits are unavailable.");
+        const master=Buffer.from(config.SITEWITNESS_STORAGE_KEY!,"hex");
+        const rateKey=createHmac("sha256",master).update("sitewitness:public-analysis:ip-rate-limit:v1").digest();
+        const digest=createHmac("sha256",rateKey).update(forwarded).digest("hex").slice(0,48);
+        userId=`ip_${digest}`;
+        await store.consume(`analysis-burst-${digest}`,2,60000,now());
+        await store.consume(`analysis-hour-${digest}`,10,3600000,now());
+      }else if(serverless){
         const users=parseConfiguredUsers(config.SITEWITNESS_USERS);
         userId=authenticateUser(request.headers.get("authorization")??"",users).id;
       }else{
@@ -163,7 +181,9 @@ export function createAnalyzeHandler(
       }
       const limit = config.INFERENCE_DAILY_LIMIT ?? "0";
       if (!/^(0|[1-9][0-9]{0,4})$/.test(limit)) throw new ServiceError(503, "Inference budget is not configured.");
-      const userLimit = config.INFERENCE_USER_DAILY_LIMIT ?? "0";
+      const userLimit = publicAnalysis
+        ? config.INFERENCE_IP_DAILY_LIMIT ?? config.INFERENCE_USER_DAILY_LIMIT ?? "0"
+        : config.INFERENCE_USER_DAILY_LIMIT ?? "0";
       if (!/^(0|[1-9][0-9]{0,4})$/.test(userLimit)) throw new ServiceError(503, "Inference budget is not configured.");
       const lifetimeLimit = config.INFERENCE_CALL_LIMIT ?? "0";
       if (!/^(0|[1-9][0-9]{0,5})$/.test(lifetimeLimit)) throw new ServiceError(503, "Inference budget is not configured.");

@@ -29,5 +29,5 @@ test("split transport uploads binary photos, restores browser copy, and deletes"
  await page.getByRole("button",{name:"Restore to this browser"}).click();await expect(page.getByText("Restored as a new browser copy.",{exact:false})).toBeVisible();
  page.once("dialog",d=>d.accept());await page.getByRole("button",{name:"Delete snapshot"}).click();await expect(page.getByRole("heading",{name:inspection.question})).toHaveCount(0);
  expect(methods).toContain("PUT");
- await page.goto("/");await page.getByRole("button").filter({hasText:inspection.question}).click();await expect(page.getByRole("img",{name:"Manual inspection photograph: split.png"})).toBeVisible();
+ await page.goto("/");await page.getByRole("button").filter({hasText:inspection.question}).click();await expect(page.getByRole("img",{name:"Inspection photograph: split.png"})).toBeVisible();
 });

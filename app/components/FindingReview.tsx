@@ -4,6 +4,7 @@ type Props = {
   f: Finding;
   i: number;
   result: Saved;
+  aiSuggestion?: boolean;
   updateReview: (id: string, value: string) => void;
   updateFinding: (id: string, field: "edit" | "note", value: string) => void;
 };
@@ -11,6 +12,7 @@ export function FindingReview({
   f,
   i,
   result,
+  aiSuggestion = false,
   updateReview,
   updateFinding,
 }: Props) {
@@ -23,7 +25,7 @@ export function FindingReview({
         <strong>{f.title}</strong>
       </div>
       <label>
-        {result.provenance.kind === "manual" ? "Observation description" : "Reviewed observation"}
+        {aiSuggestion ? "Human reviewed suggestion" : result.provenance.kind === "manual" ? "Observation description" : "Reviewed observation"}
         <textarea
           required={result.provenance.kind === "manual"}
           rows={3}

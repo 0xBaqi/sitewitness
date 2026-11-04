@@ -4,7 +4,6 @@ import { asSaved, audit, captured, fingerprint, matchesCapturedPhoto, newReview,
 import { deleteCaptured, loadCaptured, saveCaptured, type CapturedReview } from "../../lib/captured-storage";
 import { FindingReview } from "../components/FindingReview";
 
-import { InspectionIntro } from "../components/InspectionIntro";
 
 export default function EvidencePage(){
   const [draft,setDraft]=useState<CapturedReview|null>(null);
@@ -57,7 +56,7 @@ export default function EvidencePage(){
   const human=draft?.human,finding=captured.report.findings[selected];
   return <main className="trace-page">
     <header className="top experience-top"><a className="brand" href="/"><span className="mark">SW</span><span>SiteWitness</span></a><nav aria-label="Workspace navigation"><a href="/#manual">Manual workspace</a><a href="#review-record">Review record</a></nav></header>
-    {!draft&&<InspectionIntro onExplore={()=>void openPhoto()} disabled={busy||loading}/>}
+    {!draft&&<section className="panel"><p className="eyebrow">OPTIONAL CAPTURED EXAMPLE</p><h1>Review the saved example</h1><p>This report was generated previously and is not new analysis.</p><button className="primary" type="button" onClick={()=>void openPhoto()} disabled={busy||loading}>Open labeled captured example</button></section>}
     {draft&&<><section className="review-heading"><div><p className="eyebrow">EVIDENCE TRACE / CONSTRUCTION INSPECTION</p><h1>The evidence. Your judgement.</h1></div><span className="tag">META / MUSE SPARK 1.3</span></section><p className="capture-caption"><span className="capture-dot" aria-hidden="true"/> Previously generated real Meta AI report; new live analysis disabled.</p></>}
     <div className="trace-tools" id="review-record">
       <div className="tool-status"><strong>{draft?"Browser-local review":"Captured result · no new inference."}</strong><p className="save-status" role="status">{dirty?"Unsaved changes. ":""}{status|| (draft?"Review each observation, then save or export.":"Explore the real report to record your decisions.")}</p></div>
