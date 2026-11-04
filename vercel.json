@@ -31,6 +31,9 @@
   ],
   "env": {
     "INFERENCE_ENABLED": "false",
+    "INFERENCE_BUDGET_DRY_RUN": "false",
+    "INFERENCE_DAILY_LIMIT": "0",
+    "INFERENCE_USER_DAILY_LIMIT": "0",
     "INFERENCE_CALL_LIMIT": "0"
   },
   "crons": [

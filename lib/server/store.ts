@@ -25,6 +25,14 @@ export class LocalStore {
     try { const result = fn(); this.db.exec("COMMIT"); return result; }
     catch (error) { this.db.exec("ROLLBACK"); throw error; }
   }
+  private incrementCounter(name: string, max: number, until: number, now: number) {
+    const row = this.db.prepare("SELECT count, until FROM counters WHERE name=?").get(name) as {count:number;until:number}|undefined;
+    const active = row && now < row.until;
+    const count = active ? row.count : 0;
+    const boundary = active ? row.until : until;
+    if (count >= max) throw new ServiceError(429, "Inference usage limit reached.", Math.max(1, Math.ceil((boundary-now)/1000)));
+    this.db.prepare("INSERT INTO counters VALUES (?, ?, ?) ON CONFLICT(name) DO UPDATE SET count=excluded.count, until=excluded.until").run(name,count+1,boundary);
+  }
   consume(name: string, max: number, window: number, now: number) {
     if (!Number.isSafeInteger(max) || max < 0 || !Number.isSafeInteger(now) || now < 0)
       throw new ServiceError(503, "Usage protection is unavailable.");
@@ -35,6 +43,16 @@ export class LocalStore {
       const until = active ? row.until : now + window;
       if (count >= max) throw new ServiceError(429, "Usage limit reached. Try later.", Math.max(1, Math.ceil((until-now)/1000)));
       this.db.prepare("INSERT INTO counters VALUES (?, ?, ?) ON CONFLICT(name) DO UPDATE SET count=excluded.count, until=excluded.until").run(name, count+1, until);
+    });
+  }
+  reserveAnalysis(userId:string,userDaily:number,globalDaily:number,lifetime:number,now:number) {
+    if(!/^[a-zA-Z0-9_-]{1,64}$/.test(userId) || ![userDaily,globalDaily,lifetime,now].every(Number.isSafeInteger) || [userDaily,globalDaily,lifetime,now].some(value=>value<0))
+      throw new ServiceError(503,"Usage protection is unavailable.");
+    const date=new Date(now),day=date.toISOString().slice(0,10),nextMidnight=Date.UTC(date.getUTCFullYear(),date.getUTCMonth(),date.getUTCDate()+1);
+    this.transaction(()=>{
+      this.incrementCounter(`analysis-user-${userId}-${day}`,userDaily,nextMidnight,now);
+      this.incrementCounter(`analysis-daily-${day}`,globalDaily,nextMidnight,now);
+      this.incrementCounter("inference-lifetime",lifetime,Number.MAX_SAFE_INTEGER,now);
     });
   }
   // Lifetime reservations are never refunded, even when upstream fails or the process dies.

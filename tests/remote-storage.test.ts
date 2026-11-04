@@ -14,7 +14,7 @@ const key=Buffer.alloc(32,42), now=1700000000000;
 const engine=new PGlite();
 after(async()=>{await engine.close();});
 async function setup(){
- const pg=engine;await pg.exec(readFileSync("deploy/migrations/009-neon.sql","utf8"));
+ const pg=engine;await pg.exec(readFileSync("deploy/migrations/009-neon.sql","utf8"));await pg.exec(readFileSync("deploy/migrations/010-neon-inference-budget.sql","utf8"));
  const database:Database={transaction:fn=>pg.transaction(tx=>fn({query:(q,v)=>tx.query(q,v)})),close:async()=>{}};
  const blobs=new Map<string,Buffer>();let failPut=false,failDelete=false;
  const objects:Objects={async put(p,b){blobs.set(p,Buffer.from(b));if(failPut)throw new Error("Ambiguous put");},async get(p){const b=blobs.get(p);if(!b)throw new Error("Missing blob");return b;},async remove(paths){if(failDelete)throw new Error("Provider unavailable");for(const p of paths)blobs.delete(p);}};

@@ -15,7 +15,7 @@ after(() => directories.forEach(path => rmSync(path, {recursive:true, force:true
 function createAnalyzeHandler(options: Parameters<typeof productionHandler>[0] = {}) {
   const dir = mkdtempSync(join(tmpdir(), "sitewitness-backend-"));
   directories.push(dir);
-  return productionHandler({inferenceAuthorized:true, store:()=>new LocalStore(join(dir,"test.sqlite")), ...options});
+  return productionHandler({store:()=>new LocalStore(join(dir,"test.sqlite")), ...options});
 }
 // SYNTHETIC TEST DATA. All HTTP is stubbed; nothing here is model inference.
 globalThis.fetch = async () => {
@@ -25,6 +25,8 @@ const env = () => ({
   MODEL_API_KEY: "SYNTHETIC_TEST_KEY",
   SITEWITNESS_ACCESS_CODE: "SYNTHETIC_TEST_ACCESS",
   INFERENCE_ENABLED: "true",
+  INFERENCE_USER_DAILY_LIMIT: "100",
+  INFERENCE_DAILY_LIMIT: "100",
   INFERENCE_CALL_LIMIT: "100",
 });
 const report = {
@@ -260,19 +262,19 @@ test("duplicate finding IDs are rejected", async () => {
   );
 });
 
-test("production handler remains locked even with enabled environment", async () => {
+test("production handler fails closed without durable storage", async () => {
   let called=false;
   const response=await productionHandler({env,infer:async()=>{called=true;return report;}})(await upload());
   assert.equal(response.status,503);
   assert.equal(called,false);
 });
-test("zero budget blocks adapter and upstream failures consume reservations", async () => {
+test("authenticated daily budget blocks adapter and upstream failures consume reservations", async () => {
   let calls=0;
-  const post=createAnalyzeHandler({env:()=>({...env(),INFERENCE_CALL_LIMIT:"1"}),infer:async()=>{calls++;throw new Error("failure");}});
+  const post=createAnalyzeHandler({env:()=>({...env(),INFERENCE_DAILY_LIMIT:"1",INFERENCE_CALL_LIMIT:"100"}),infer:async()=>{calls++;throw new Error("failure");}});
   assert.equal((await post(await upload())).status,500);
   assert.equal((await post(await upload())).status,429);
   assert.equal(calls,1);
-  const zero=createAnalyzeHandler({env:()=>({...env(),INFERENCE_CALL_LIMIT:"0"}),infer:async()=>{throw new Error("must not run");}});
+  const zero=createAnalyzeHandler({env:()=>({...env(),INFERENCE_DAILY_LIMIT:"100",INFERENCE_CALL_LIMIT:"0"}),infer:async()=>{throw new Error("must not run");}});
   assert.equal((await zero(await upload())).status,429);
 });
 

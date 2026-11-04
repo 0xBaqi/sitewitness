@@ -1,9 +1,8 @@
-import { createHash, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 import { openRemoteStore } from "./remote-provider";
 import { type RemoteStore } from "./remote-store";
 import { readBounded, ServiceError } from "./errors";
-const usersSchema=z.array(z.object({id:z.string().regex(/^[a-zA-Z0-9_-]{1,64}$/),tokenHash:z.string().regex(/^[a-f0-9]{64}$/)}).strict()).min(1).max(100).refine(users=>new Set(users.map(u=>u.id)).size===users.length && new Set(users.map(u=>u.tokenHash)).size===users.length);
+import { authenticateUser, parseConfiguredUsers } from "./users";
 const uuid=(value:string|null)=>{if(!value || !z.string().uuid().safeParse(value).success)throw new ServiceError(400,"Invalid identifier.");return value;};
 export function createRemoteHandler(options:{env?:()=>Record<string,string|undefined>;store?:(env:Record<string,string|undefined>)=>RemoteStore;now?:()=>number}={}) {
  return async(request:Request)=>{
@@ -16,13 +15,9 @@ export function createRemoteHandler(options:{env?:()=>Record<string,string|undef
    let origin:string;
    try {origin=env.SITEWITNESS_PUBLIC_ORIGIN!;if(new URL(origin).origin!==origin)throw new Error();}catch{throw new ServiceError(503,"Public origin is not configured.");}
    if((request.headers.get("origin") && request.headers.get("origin")!==origin) || request.headers.get("sec-fetch-site")==="cross-site")throw new ServiceError(403,"Invalid request origin.");
-   let users:z.infer<typeof usersSchema>;
-   try{users=usersSchema.parse(JSON.parse(env.SITEWITNESS_USERS??""));}catch{throw new ServiceError(503,"Inspection access is not configured.");}
+   const users=parseConfiguredUsers(env.SITEWITNESS_USERS);
    store=(options.store??openRemoteStore)(env);await store.consume(now);
-   const token=request.headers.get("authorization")??"";
-   if(!/^Bearer [A-Za-z0-9_-]{43,128}$/.test(token))throw new ServiceError(401,"Invalid inspection credentials.");
-   const hash=createHash("sha256").update(token.slice(7)).digest(),user=users.find(u=>timingSafeEqual(hash,Buffer.from(u.tokenHash,"hex")));
-   if(!user)throw new ServiceError(401,"Invalid inspection credentials.");
+   const user=authenticateUser(request.headers.get("authorization")??"",users);
    const url=new URL(request.url),id=url.searchParams.get("id"),photo=url.searchParams.get("photo");
    if(request.method==="GET") {
     if(photo){const data=await store.photo(user.id,uuid(id),uuid(photo),now);return new Response(new Uint8Array(data.bytes),{headers:{...headers,"Content-Type":data.type,"Content-Disposition":"attachment"}});}

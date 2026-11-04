@@ -1,43 +1,29 @@
 import { test, expect } from '@playwright/test';
-import source from '../lib/evidence/captured.json';
 
-test('first visit shows genuine evidence and one-click review preserves saved decisions', async ({page,context})=>{
-  const apiRequests:string[]=[];
-  await context.route('**/*',route=>{
-    const u=new URL(route.request().url());
-    if(u.pathname.startsWith('/api/')){apiRequests.push(u.pathname);return route.abort();}
-    if(!['127.0.0.1','localhost'].includes(u.hostname))return route.abort();
-    return route.continue();
-  });
-  await page.setViewportSize({width:1440,height:1000});
+test('first visit prioritizes live upload; synthetic response supports human review, save, reopen and PDF action', async ({page})=>{
+  let requests=0;
+  await page.route('**/*',async route=>{const u=new URL(route.request().url());if(!['127.0.0.1','localhost'].includes(u.hostname))return route.abort();if(u.pathname==='/api/analyze'){requests++;expect(route.request().headers()['x-sitewitness-access']).toBe('SYNTHETIC TEST CODE');return route.fulfill({json:{model:'muse-spark-1.3',timestamp:'2026-11-03T00:00:00.000Z',report:{overview:'SYNTHETIC TEST: visible timber formwork.',findings:[{id:'f1',category:'observation',title:'Synthetic timber formwork',description:'SYNTHETIC TEST: boards are visible.',evidence:'SYNTHETIC TEST: timber boards.',limitation:'SYNTHETIC TEST: condition is unknown.'}],unanswered_questions:['SYNTHETIC TEST: verify drawings.'],notice:'SYNTHETIC TEST: not engineering certification.'}}});}return route.continue();});
   await page.goto('/');
-  const preview=page.getByRole('region',{name:'Genuine captured findings'});
-  for(const finding of source.report.findings)await expect(preview.getByRole('heading',{name:finding.title})).toBeVisible();
-  await expect(page.getByRole('img',{name:/Construction site with timber/})).toBeVisible();
-  await expect(page.getByText('Previously generated real Meta AI report; new live analysis disabled.',{exact:true})).toBeVisible();
-  await expect(page.getByText('AI analysis is unavailable.',{exact:true})).toHaveCount(0);
-  await page.screenshot({path:'test-results/m7-home-desktop.png',fullPage:true});
-  for(const width of [320,390,768]){
-    await page.setViewportSize({width,height:844});
-    expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
-  }
-  await page.setViewportSize({width:390,height:844});
-  await page.screenshot({path:'test-results/m7-home-mobile.png',fullPage:true});
-  await page.getByRole('link',{name:'Explore AI inspection'}).click();
-  await expect(page.getByLabel('Reviewer decision')).toBeVisible();
-  await page.getByLabel('Reviewer decision').selectOption('investigate');
-  await page.getByLabel('Reviewer notes').fill('SYNTHETIC M7: verify on site');
-  await page.getByRole('button',{name:'Save review and photograph',exact:true}).click();
-  await expect(page.getByRole('status')).toContainText('Review and photograph saved');
+  await expect(page.getByRole('link',{name:/Analyze a site photograph/})).toBeVisible();
+  await expect(page.getByRole('region',{name:'Genuine captured findings'})).toHaveCount(0);
+  await expect(page.getByText(/Optional example · previously generated Meta report/)).toBeVisible();
+  await page.getByRole('link',{name:/Analyze a site photograph/}).click();
+  await page.getByLabel('Site access code').fill('SYNTHETIC TEST CODE');
+  await page.getByLabel('Construction photograph').setInputFiles('public/evidence/captured-construction.jpg');
+  await page.getByRole('button',{name:'Analyze with Meta Muse Spark'}).click();
+  await expect(page.getByText('SYNTHETIC TEST: visible timber formwork.').first()).toBeVisible();
+  await page.getByLabel('Decision').selectOption('investigate');
+  await page.getByLabel('Reviewer notes').fill('SYNTHETIC TEST: verify on site.');
+  await page.getByRole('button',{name:'Save report and photograph'}).click();
+  await expect(page.getByRole('status')).toContainText('saved in this browser');
   await page.reload();
-  await expect(page.getByLabel('Reviewer notes')).toHaveValue('SYNTHETIC M7: verify on site');
-  await expect(page.getByRole('navigation',{name:'Select captured finding'}).getByRole('button').first()).toContainText('Investigate');
-  for(const width of [320,390,768,1440]){
-    await page.setViewportSize({width,height:1000});
-    expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
-  }
-  await page.screenshot({path:'test-results/m7-review-desktop.png',fullPage:true});
-  await page.setViewportSize({width:390,height:844});
-  await page.screenshot({path:'test-results/m7-review-mobile.png',fullPage:true});
-  expect(apiRequests).toEqual([]);
+  await page.getByRole('button',{name:/Describe visible construction elements/}).click();
+  await expect(page.getByLabel('Reviewer notes')).toHaveValue('SYNTHETIC TEST: verify on site.');
+  await expect(page.getByLabel('Decision')).toHaveValue('investigate');
+  await expect(page.getByRole('button',{name:'Print / Save as PDF'})).toBeVisible();
+  await page.emulateMedia({media:'print'});
+  await expect(page.locator('.print-report')).toBeVisible();
+  await expect(page.locator('.print-report img')).toBeVisible();
+  await expect(page.locator('.print-report')).toContainText('Human reviewed description');
+  expect(requests).toBe(1);
 });

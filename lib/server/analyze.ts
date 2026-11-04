@@ -3,21 +3,32 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import sharp from "sharp";
 import { createMetaAdapter, type Inference } from "./meta";
 import { readBounded, ServiceError } from "./errors";
+import { openNeonInferenceBudget } from "./neon-inference-budget";
+import { authenticateUser, parseConfiguredUsers } from "./users";
 const imageLimit = 4 * 1024 * 1024;
 const bodyLimit = imageLimit + 65536;
 type Environment = {
   MODEL_API_KEY?: string;
   SITEWITNESS_ACCESS_CODE?: string;
+  SITEWITNESS_USERS?: string;
+  SITEWITNESS_PUBLIC_ORIGIN?: string;
+  SITEWITNESS_STORAGE_PROVIDER?: string;
+  INSPECTION_STORAGE_ENABLED?: string;
+  DATABASE_URL?: string;
   INFERENCE_ENABLED?: string;
+  INFERENCE_BUDGET_DRY_RUN?: string;
+  INFERENCE_USER_DAILY_LIMIT?: string;
+  INFERENCE_DAILY_LIMIT?: string;
   INFERENCE_CALL_LIMIT?: string;
+  VERCEL?: string;
 };
+type AnalysisStore = Pick<LocalStore,"consume"|"reserveAnalysis"> & {close():void|Promise<void>};
 export function createAnalyzeHandler(
   options: {
     env?: () => Environment;
     infer?: Inference;
     now?: () => number;
-    store?: () => LocalStore;
-    inferenceAuthorized?: boolean;
+    store?: () => AnalysisStore;
   } = {},
 ) {
   const env = options.env ?? (() => process.env);
@@ -33,40 +44,46 @@ export function createAnalyzeHandler(
       },
     });
   return async (request: Request): Promise<Response> => {
-    let store: LocalStore | undefined;
+    let store: AnalysisStore | undefined;
     try {
       const config = env();
-      // This milestone has no authorized live inference path. Environment alone cannot unlock it.
-      if (options.inferenceAuthorized !== true)
-        throw new ServiceError(503, "Analysis is disabled pending operator authorization.");
+      const serverless = config.VERCEL === "1" || config.SITEWITNESS_STORAGE_PROVIDER === "neon-blob";
+      const inferenceEnabled=config.INFERENCE_ENABLED==="true",budgetDryRun=config.INFERENCE_BUDGET_DRY_RUN==="true";
+      if(inferenceEnabled&&budgetDryRun)
+        throw new ServiceError(503,"Conflicting inference modes are configured.");
+      if(!inferenceEnabled&&!budgetDryRun)
+        throw new ServiceError(503,"Analysis is disabled pending operator authorization.");
+      if(budgetDryRun&&!serverless)
+        throw new ServiceError(503,"Budget acceptance mode is available only on the configured serverless adapter.");
       if (
-        !config.MODEL_API_KEY?.trim() ||
-        !config.SITEWITNESS_ACCESS_CODE?.trim()
+        (inferenceEnabled&&!config.MODEL_API_KEY?.trim()) ||
+        (!serverless && !config.SITEWITNESS_ACCESS_CODE?.trim())
       )
         throw new ServiceError(503, "Analysis service is not configured.");
-      if (config.INFERENCE_ENABLED !== "true")
-        throw new ServiceError(
-          503,
-          "Analysis is disabled pending operator authorization.",
-        );
       const origin = request.headers.get("origin");
-      if (origin && origin !== new URL(request.url).origin)
+      let expectedOrigin:string;
+      if(serverless){
+        try{const parsed=new URL(config.SITEWITNESS_PUBLIC_ORIGIN??"");if(parsed.protocol!=="https:"||parsed.origin!==config.SITEWITNESS_PUBLIC_ORIGIN)throw new Error();expectedOrigin=parsed.origin;}
+        catch{throw new ServiceError(503,"Public origin is not configured.");}
+      } else expectedOrigin=new URL(request.url).origin;
+      if ((serverless && !origin) || (origin && origin !== expectedOrigin))
         throw new ServiceError(403, "Invalid request origin.");
       if (request.headers.get("sec-fetch-site") === "cross-site")
         throw new ServiceError(403, "Invalid request origin.");
-      store = options.store?.() ?? openLocalStore();
+      store = options.store?.() ?? (serverless?openNeonInferenceBudget(config):openLocalStore());
       store.consume("analysis-attempts", 60, 60000, now());
-      const supplied = request.headers.get("x-sitewitness-access") ?? "";
-      const digest = (text: string) =>
-        createHash("sha256").update(text).digest();
-      if (
-        supplied.length > 1024 ||
-        !timingSafeEqual(
-          digest(supplied),
-          digest(config.SITEWITNESS_ACCESS_CODE),
-        )
-      )
-        throw new ServiceError(401, "Incorrect access code.");
+      let userId="local";
+      if(serverless){
+        const users=parseConfiguredUsers(config.SITEWITNESS_USERS);
+        userId=authenticateUser(request.headers.get("authorization")??"",users).id;
+      }else{
+        const supplied = request.headers.get("x-sitewitness-access") ?? "";
+        const digest = (text: string) => createHash("sha256").update(text).digest();
+        if(supplied.length>1024||!timingSafeEqual(digest(supplied),digest(config.SITEWITNESS_ACCESS_CODE!)))
+          throw new ServiceError(401,"Incorrect access code.");
+      }
+      // Authenticated requests share durable throttles; they do not trust client IPs.
+      await store.consume("analysis-decodes", 10, 3600000, now());
       const contentType = request.headers.get("content-type") ?? "";
       if (!/^multipart\/form-data;.*boundary=/i.test(contentType))
         throw new ServiceError(415, "Send a multipart photograph upload.");
@@ -121,8 +138,6 @@ export function createAnalyzeHandler(
       };
       if (!formats[photo.type])
         throw new ServiceError(415, "Use JPEG, PNG, or WebP.");
-      // Charge authenticated attempts before expensive decode, including malformed images.
-      store.consume("analysis-decodes", 10, 3600000, now());
       let image: Uint8Array;
       try {
         const bytes = Buffer.from(await photo.arrayBuffer());
@@ -146,13 +161,20 @@ export function createAnalyzeHandler(
           "Photograph could not be decoded. Use a non-animated JPEG, PNG, or WebP under 24 megapixels.",
         );
       }
-      const limit = config.INFERENCE_CALL_LIMIT ?? "0";
-      if (!/^(0|[1-9][0-9]{0,5})$/.test(limit)) throw new ServiceError(503, "Inference budget is not configured.");
-      store.reserve(Number(limit), now());
+      const limit = config.INFERENCE_DAILY_LIMIT ?? "0";
+      if (!/^(0|[1-9][0-9]{0,4})$/.test(limit)) throw new ServiceError(503, "Inference budget is not configured.");
+      const userLimit = config.INFERENCE_USER_DAILY_LIMIT ?? "0";
+      if (!/^(0|[1-9][0-9]{0,4})$/.test(userLimit)) throw new ServiceError(503, "Inference budget is not configured.");
+      const lifetimeLimit = config.INFERENCE_CALL_LIMIT ?? "0";
+      if (!/^(0|[1-9][0-9]{0,5})$/.test(lifetimeLimit)) throw new ServiceError(503, "Inference budget is not configured.");
+      const timestamp = now();
+      await store.reserveAnalysis(userId,Number(userLimit),Number(limit),Number(lifetimeLimit),timestamp);
+      if(budgetDryRun)
+        throw new ServiceError(503,"Budget acceptance passed validation and reserved allowance. No model request was made.");
       const report = await infer({
         image,
         question: question.trim(),
-        apiKey: config.MODEL_API_KEY,
+        apiKey: config.MODEL_API_KEY!,
       });
       return json({
         report,
@@ -167,6 +189,6 @@ export function createAnalyzeHandler(
         { error: "Analysis could not be completed. Try again later." },
         500,
       );
-    } finally { store?.close(); }
+    } finally { try{await store?.close();}catch{/* Closing a pool must not replace the request's safe response. */} }
   };
 }

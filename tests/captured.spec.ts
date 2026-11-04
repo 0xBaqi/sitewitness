@@ -61,7 +61,7 @@ test('unrelated photograph and corrupt sample never acquire a captured report',a
   await expect(page.getByLabel('Reviewer decision')).toHaveCount(0);
 });
 test('storage failure keeps draft exportable and concurrent review cannot overwrite',async({page,context})=>{
-  await page.goto('/evidence');await page.getByRole('button',{name:'Explore AI inspection'}).click();
+  await page.goto('/evidence');await page.getByRole('button',{name:'Explore captured example'}).click();
   await expect(page.getByLabel('Reviewer decision')).toBeVisible();
   await page.evaluate(()=>{const original=IDBDatabase.prototype.transaction;(window as any).restoreStorage=()=>{IDBDatabase.prototype.transaction=original;};IDBDatabase.prototype.transaction=function(...args:Parameters<typeof original>){if(args[1]==='readwrite')throw new DOMException('Storage unavailable','QuotaExceededError');return original.apply(this,args);};});
   await page.getByLabel('Reviewer notes').fill('Keep this draft');await page.getByRole('button',{name:'Save review and photograph'}).click();
