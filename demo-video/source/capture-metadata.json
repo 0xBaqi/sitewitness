@@ -1,0 +1,23 @@
+{
+  "capturedAt": "2026-11-04T20:43:56.233Z",
+  "preview": "https://sitewitness-fhewd1vxi-0x-baqi.vercel.app/",
+  "previewResolvedAddress": "64.29.17.67",
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "video": "deployed-preview-walkthrough.webm",
+  "videoSha256": "020caf7dec7dcf227b54e56744bfcc4722622daaafddd329fb33682ffc68cda1",
+  "existingExample": {
+    "id": "muse-spark-2026-11-03-attempt-2",
+    "model": "muse-spark-1.3",
+    "generatedAt": "2026-11-03T00:58:56.444Z",
+    "photoSha256": "a2f25a2177b635c9ede4ad4882275e9611b3261a8d8c56295d18effc9396a85a"
+  },
+  "analysisRequests": [],
+  "pageErrors": [],
+  "mobileWidth": {
+    "viewport": 390,
+    "page": 390
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "file": "output/sitewitness-demo.mp4",
+  "sha256": "1e4e8d36dcf0397c2bfe07c710a1db445fcc268f1a6fb1fea63479bd8eae1e7e",
+  "durationSeconds": 139.237,
+  "video": {
+    "codec": "h264",
+    "width": 1920,
+    "height": 1080,
+    "frameRate": "25/1"
+  },
+  "audio": {
+    "codec": "aac",
+    "sampleRate": "48000",
+    "channels": 2
+  },
+  "fullDecode": "passed"
+}

@@ -25,7 +25,8 @@ export class NeonInferenceBudget {
  async consume(name:string,max:number,window:number,now:number){
   if(!/^[a-zA-Z0-9_-]{1,100}$/.test(name)||![max,window,now].every(Number.isSafeInteger)||max<0||window<1||now<0)
    throw new ServiceError(503,"Usage protection is unavailable.");
-  return this.locked(async sql=>this.increment(sql,name,max,now+window,now));
+  const message=name.startsWith("analysis-burst-")?"Too many analyses from this network in a short period. Please wait before trying again.":name.startsWith("analysis-hour-")?"This network has reached its hourly analysis allowance. Try again after the wait shown.":name==="analysis-attempts"?"Analysis traffic is temporarily high. Please wait before trying again.":name==="analysis-decodes"?"The shared hourly analysis allowance is temporarily full. Try again later.":"Usage limit reached. Try again later.";
+  return this.locked(async sql=>this.increment(sql,name,max,now+window,now,message));
  }
 
  async reserveAnalysis(userId:string,userDaily:number,globalDaily:number,lifetime:number,now:number){
@@ -33,16 +34,48 @@ export class NeonInferenceBudget {
    throw new ServiceError(503,"Usage protection is unavailable.");
   const date=new Date(now),day=date.toISOString().slice(0,10),nextMidnight=Date.UTC(date.getUTCFullYear(),date.getUTCMonth(),date.getUTCDate()+1);
   return this.locked(async sql=>{
+   // The policy revision raises ceilings in place. It never changes reservation
+   // rows; a durable audit snapshot records the prior limits and live counters.
+   await sql.query("CREATE TABLE IF NOT EXISTS sw_inference_policy_audit (revision text PRIMARY KEY, epoch_id text NOT NULL, reason text NOT NULL, prior_limits jsonb NOT NULL, new_limits jsonb NOT NULL, prior_counters jsonb NOT NULL, prior_exhausted_gates jsonb NOT NULL, applied_at_ms bigint NOT NULL)");
    const result=await sql.query("SELECT id,legacy_lifetime_state,global_daily_limit,per_identity_daily_limit,lifetime_limit FROM sw_inference_epochs WHERE id='judge-v1-legacy-unknown' FOR UPDATE");
    const epoch=result.rows[0] as {id:string;legacy_lifetime_state:string;global_daily_limit:unknown;per_identity_daily_limit:unknown;lifetime_limit:unknown}|undefined;
-   if(!epoch||epoch.legacy_lifetime_state!=="unknown"||Number(epoch.global_daily_limit)!==globalDaily||Number(epoch.per_identity_daily_limit)!==userDaily||Number(epoch.lifetime_limit)!==lifetime)
-    throw new ServiceError(503,"Inference budget epoch is missing or mismatched.");
+   if(!epoch||epoch.legacy_lifetime_state!=="unknown")throw new ServiceError(503,"Inference budget epoch is missing or mismatched.");
+   const oldLimits={globalDaily:Number(epoch.global_daily_limit),perIdentityDaily:Number(epoch.per_identity_daily_limit),lifetime:Number(epoch.lifetime_limit)};
+   const newLimits={globalDaily,perIdentityDaily:userDaily,lifetime};
+   const revision=`judge-policy-g${globalDaily}-i${userDaily}-l${lifetime}`;
+   const priorAudit=(await sql.query("SELECT new_limits FROM sw_inference_policy_audit WHERE revision=$1",[revision])).rows[0] as {new_limits:unknown}|undefined;
+   if(!priorAudit){
+    if(globalDaily<oldLimits.globalDaily||userDaily<oldLimits.perIdentityDaily||lifetime<oldLimits.lifetime)
+     throw new ServiceError(503,"Inference budget policy cannot reduce existing allowances.");
+    const digest=userId.startsWith("ip_")?userId.slice(3):"";
+    const names=[`inference-epoch-${epoch.id}-identity-${userId}-${day}`,`inference-epoch-${epoch.id}-daily-${day}`,`inference-epoch-${epoch.id}-lifetime`,...(digest?[`analysis-burst-${digest}`,`analysis-hour-${digest}`]:[]),"analysis-attempts","analysis-decodes"];
+    const rows=(await sql.query("SELECT name,count,until_ms FROM sw_counters WHERE name=ANY($1::text[])",[names])).rows as Array<{name:string;count:unknown;until_ms:unknown}>;
+    const counts=Object.fromEntries(rows.map(row=>[row.name,now<counterValue(row.until_ms)?counterValue(row.count):0]));
+    // The rate counters were incremented earlier in this same request. Record
+    // the count that the former policy evaluated, before this request's tick.
+    const incrementedThisRequest=["analysis-attempts","analysis-decodes",...(digest?[`analysis-burst-${digest}`,`analysis-hour-${digest}`]:[])];
+    const beforeRequest=(name:string)=>Math.max(0,(counts[name]??0)-(incrementedThisRequest.includes(name)?1:0));
+    const exhausted:string[]=[];
+    if(digest){if(beforeRequest(`analysis-burst-${digest}`)>=2)exhausted.push("per-ip-burst");if(beforeRequest(`analysis-hour-${digest}`)>=10)exhausted.push("per-ip-hour");}
+    if(beforeRequest("analysis-attempts")>=60)exhausted.push("global-attempts-per-minute");
+    if(beforeRequest("analysis-decodes")>=10)exhausted.push("global-decodes-per-hour");
+    if((counts[names[0]]??0)>=oldLimits.perIdentityDaily)exhausted.push("per-ip-daily");
+    if((counts[names[1]]??0)>=oldLimits.globalDaily)exhausted.push("global-daily");
+    if((counts[names[2]]??0)>=oldLimits.lifetime)exhausted.push("lifetime-epoch");
+    await sql.query("INSERT INTO sw_inference_policy_audit(revision,epoch_id,reason,prior_limits,new_limits,prior_counters,prior_exhausted_gates,applied_at_ms) VALUES($1,$2,$3,$4::jsonb,$5::jsonb,$6::jsonb,$7::jsonb,$8)",[revision,epoch.id,"Raise finite judge-facing analysis allowances while preserving every existing counter; historical SQLite lifetime usage remains unknown.",JSON.stringify(oldLimits),JSON.stringify(newLimits),JSON.stringify(counts),JSON.stringify(exhausted),now]);
+    await sql.query("UPDATE sw_inference_epochs SET global_daily_limit=$1,per_identity_daily_limit=$2,lifetime_limit=$3 WHERE id=$4",[globalDaily,userDaily,lifetime,epoch.id]);
+    console.info("SITEWITNESS_INFERENCE_POLICY_AUDIT",JSON.stringify({revision,priorLimits:oldLimits,newLimits,priorExhaustedGates:exhausted}));
+   }else {
+    const recorded=priorAudit.new_limits as {globalDaily?:number;perIdentityDaily?:number;lifetime?:number};
+    if(recorded.globalDaily!==globalDaily||recorded.perIdentityDaily!==userDaily||recorded.lifetime!==lifetime||oldLimits.globalDaily!==globalDaily||oldLimits.perIdentityDaily!==userDaily||oldLimits.lifetime!==lifetime)
+    throw new ServiceError(503,"Inference budget policy is inconsistent with its audit record.");
+   }
    // New epoch keys preserve every prior counter, including any prior lifetime row.
    // Lock and reserve every ceiling together so concurrent instances cannot overspend.
    const prefix=`inference-epoch-${epoch.id}`;
-   await this.increment(sql,`${prefix}-identity-${userId}-${day}`,userDaily,nextMidnight,now);
-   await this.increment(sql,`${prefix}-daily-${day}`,globalDaily,nextMidnight,now);
-   await this.increment(sql,`${prefix}-lifetime`,lifetime,maxCounter,now);
+   await this.increment(sql,`${prefix}-identity-${userId}-${day}`,userDaily,nextMidnight,now,"This network has reached today's analysis allowance. Try again after UTC midnight.");
+   await this.increment(sql,`${prefix}-daily-${day}`,globalDaily,nextMidnight,now,"Today's shared analysis allowance is full. Try again after UTC midnight.");
+   await this.increment(sql,`${prefix}-lifetime`,lifetime,maxCounter,now,"This Preview's finite analysis allowance is exhausted. Contact the project owner.");
   });
  }
 
@@ -63,13 +96,13 @@ export class NeonInferenceBudget {
   });
  }
 
- private async increment(sql:Sql,name:string,max:number,until:number,now:number){
+ private async increment(sql:Sql,name:string,max:number,until:number,now:number,message:string){
   const result=await sql.query("SELECT count,until_ms FROM sw_counters WHERE name=$1 FOR UPDATE",[name]);
   const row=result.rows[0] as {count:unknown;until_ms:unknown}|undefined;
   const stored=row?counterValue(row.count):0;
   const expires=row?counterValue(row.until_ms):0;
   const active=!!row&&now<expires,count=active?stored:0,boundary=active?expires:until;
-  if(count>=max)throw new ServiceError(429,"Inference usage limit reached.",Math.max(1,Math.ceil((boundary-now)/1000)));
+  if(count>=max)throw new ServiceError(429,message,Math.max(1,Math.ceil((boundary-now)/1000)));
   await sql.query("INSERT INTO sw_counters(name,count,until_ms) VALUES($1,$2,$3) ON CONFLICT(name) DO UPDATE SET count=excluded.count,until_ms=excluded.until_ms",[name,count+1,boundary]);
  }
 }

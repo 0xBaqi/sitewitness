@@ -24,6 +24,10 @@ type Environment = {
   INFERENCE_IP_DAILY_LIMIT?: string;
   INFERENCE_DAILY_LIMIT?: string;
   INFERENCE_CALL_LIMIT?: string;
+  INFERENCE_IP_BURST_LIMIT?: string;
+  INFERENCE_IP_HOURLY_LIMIT?: string;
+  INFERENCE_GLOBAL_ATTEMPT_LIMIT?: string;
+  INFERENCE_GLOBAL_HOURLY_LIMIT?: string;
   VERCEL?: string;
   VERCEL_URL?: string;
 };
@@ -81,7 +85,12 @@ export function createAnalyzeHandler(
       if (request.headers.get("sec-fetch-site") === "cross-site")
         throw new ServiceError(403, "Invalid request origin.");
       store = options.store?.() ?? (serverless?openNeonInferenceBudget(config):openLocalStore());
-      store.consume("analysis-attempts", 60, 60000, now());
+      const boundedLimit=(key:keyof Environment,fallback:number,maximum:number)=>{
+        const value=config[key]??String(fallback);
+        if(!/^(0|[1-9][0-9]{0,5})$/.test(value)||Number(value)>maximum)throw new ServiceError(503,"Analysis abuse controls are not configured.");
+        return Number(value);
+      };
+      store.consume("analysis-attempts", boundedLimit("INFERENCE_GLOBAL_ATTEMPT_LIMIT",120,10000), 60000, now());
       let userId="local";
       if(serverless&&publicAnalysis){
         if(!/^[a-f0-9]{64}$/i.test(config.SITEWITNESS_STORAGE_KEY??""))
@@ -94,8 +103,8 @@ export function createAnalyzeHandler(
         const rateKey=createHmac("sha256",master).update("sitewitness:public-analysis:ip-rate-limit:v1").digest();
         const digest=createHmac("sha256",rateKey).update(forwarded).digest("hex").slice(0,48);
         userId=`ip_${digest}`;
-        await store.consume(`analysis-burst-${digest}`,2,60000,now());
-        await store.consume(`analysis-hour-${digest}`,10,3600000,now());
+        await store.consume(`analysis-burst-${digest}`,boundedLimit("INFERENCE_IP_BURST_LIMIT",5,1000),60000,now());
+        await store.consume(`analysis-hour-${digest}`,boundedLimit("INFERENCE_IP_HOURLY_LIMIT",30,10000),3600000,now());
       }else if(serverless){
         const users=parseConfiguredUsers(config.SITEWITNESS_USERS);
         userId=authenticateUser(request.headers.get("authorization")??"",users).id;
@@ -106,7 +115,7 @@ export function createAnalyzeHandler(
           throw new ServiceError(401,"Incorrect access code.");
       }
       // Authenticated requests share durable throttles; they do not trust client IPs.
-      await store.consume("analysis-decodes", 10, 3600000, now());
+      await store.consume("analysis-decodes", boundedLimit("INFERENCE_GLOBAL_HOURLY_LIMIT",100,10000), 3600000, now());
       const contentType = request.headers.get("content-type") ?? "";
       if (!/^multipart\/form-data;.*boundary=/i.test(contentType))
         throw new ServiceError(415, "Send a multipart photograph upload.");

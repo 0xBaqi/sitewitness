@@ -35,7 +35,8 @@ after(async()=>engine.close());
 beforeEach(async()=>{
  await engine.exec(readFileSync("deploy/migrations/009-neon.sql","utf8"));
  await engine.exec(readFileSync("deploy/migrations/010-neon-inference-budget.sql","utf8"));
- await engine.exec("TRUNCATE sw_counters,sw_counter_imports");
+ await engine.exec("CREATE TABLE IF NOT EXISTS sw_inference_policy_audit (revision text PRIMARY KEY, epoch_id text NOT NULL, reason text NOT NULL, prior_limits jsonb NOT NULL, new_limits jsonb NOT NULL, prior_counters jsonb NOT NULL, prior_exhausted_gates jsonb NOT NULL, applied_at_ms bigint NOT NULL)");
+ await engine.exec("TRUNCATE sw_counters,sw_counter_imports,sw_inference_policy_audit");
  await engine.query("UPDATE sw_inference_epochs SET global_daily_limit=4,per_identity_daily_limit=2,lifetime_limit=5 WHERE id='judge-v1-legacy-unknown'");
 });
 test("unknown legacy history is isolated and preserved while the finite new epoch reserves",async()=>{
@@ -63,6 +64,20 @@ test("unknown legacy history is isolated and preserved while the finite new epoc
  await assert.rejects(()=>store.reserveAnalysis("judge_a",2,4,5,now),{status:429});
  const unchanged=(await engine.query("SELECT count FROM sw_counters WHERE name='inference-lifetime'")).rows as {count:number}[];
  assert.equal(Number(unchanged[0].count),4);
+});
+
+test("judge policy increase is audited in place and preserves all previously exhausted counters",async()=>{
+ const date=new Date(now).toISOString().slice(0,10),until=Date.UTC(2026,10,4);
+ await engine.query("UPDATE sw_inference_epochs SET global_daily_limit=5,per_identity_daily_limit=2,lifetime_limit=10 WHERE id='judge-v1-legacy-unknown'");
+ await engine.query("INSERT INTO sw_counters(name,count,until_ms) VALUES($1,2,$4),($2,5,$4),($3,10,$5)",["inference-epoch-judge-v1-legacy-unknown-identity-ip_test-"+date,"inference-epoch-judge-v1-legacy-unknown-daily-"+date,"inference-epoch-judge-v1-legacy-unknown-lifetime",until,Number.MAX_SAFE_INTEGER]);
+ await factory().reserveAnalysis("ip_test",40,100,1000,now);
+ const audit=(await engine.query("SELECT prior_limits,new_limits,prior_counters,prior_exhausted_gates FROM sw_inference_policy_audit WHERE revision='judge-policy-g100-i40-l1000'")).rows[0] as {prior_limits:{globalDaily:number;perIdentityDaily:number;lifetime:number};new_limits:{globalDaily:number;perIdentityDaily:number;lifetime:number};prior_counters:Record<string,number>;prior_exhausted_gates:string[]};
+ assert.deepEqual(audit.prior_limits,{globalDaily:5,perIdentityDaily:2,lifetime:10});
+ assert.deepEqual(audit.new_limits,{globalDaily:100,perIdentityDaily:40,lifetime:1000});
+ assert.deepEqual(audit.prior_exhausted_gates,["per-ip-daily","global-daily","lifetime-epoch"]);
+ assert.equal(audit.prior_counters["inference-epoch-judge-v1-legacy-unknown-lifetime"],10);
+ const after=(await engine.query("SELECT name,count FROM sw_counters WHERE name LIKE 'inference-epoch-judge-v1-legacy-unknown-%'")).rows as Array<{name:string;count:number}>;
+ assert.deepEqual(after.map(x=>Number(x.count)).sort((a,b)=>a-b),[3,6,11]);
 });
 
 test("serverless analyze authenticates per-person bearer tokens and atomically persists concurrent allowances",async()=>{
@@ -118,9 +133,18 @@ test("Neon reservation enforces the configured lifetime ceiling",async()=>{
  await store.reserveAnalysis("judge_c",2,10,5,now);
  await store.reserveAnalysis("judge_d",2,10,5,now);
  await store.reserveAnalysis("judge_e",2,10,5,now);
- await assert.rejects(()=>store.reserveAnalysis("judge_f",2,10,5,now),{status:429});
+ await assert.rejects(()=>store.reserveAnalysis("judge_f",2,10,5,now),error=>error instanceof Error&&error.message.includes("finite analysis allowance"));
  const lifetime=(await engine.query("SELECT count FROM sw_counters WHERE name='inference-epoch-judge-v1-legacy-unknown-lifetime'")).rows[0] as {count:number};
  assert.equal(Number(lifetime.count),5);
+});
+
+test("per-network and shared daily exhaustion explain which allowance is full",async()=>{
+ await engine.query("UPDATE sw_inference_epochs SET global_daily_limit=2,per_identity_daily_limit=1,lifetime_limit=10 WHERE id='judge-v1-legacy-unknown'");
+ const store=factory();
+ await store.reserveAnalysis("ip_one",1,2,10,now);
+ await assert.rejects(()=>store.reserveAnalysis("ip_one",1,2,10,now),error=>error instanceof Error&&error.message.includes("This network has reached today's analysis allowance"));
+ await store.reserveAnalysis("ip_two",1,2,10,now);
+ await assert.rejects(()=>store.reserveAnalysis("ip_three",1,2,10,now),error=>error instanceof Error&&error.message.includes("Today's shared analysis allowance is full"));
 });
 
 test("serverless validation and upstream failures do not refund reserved inference allowance",async()=>{

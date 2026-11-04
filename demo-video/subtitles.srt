@@ -1,0 +1,119 @@
+1
+00:00:00,000 --> 00:00:07,753
+SiteWitness brings site context, photographs, human
+observations and AI suggestions into one inspection.
+
+2
+00:00:07,753 --> 00:00:13,142
+This public Preview opens without a judge account,
+invitation or access code.
+
+3
+00:00:13,142 --> 00:00:19,715
+For this recording, we reuse a clearly labeled, previously
+captured Muse Spark result.
+
+4
+00:00:19,715 --> 00:00:25,814
+That genuine response came from this construction
+photograph; no new model call is made.
+
+5
+00:00:25,814 --> 00:00:33,232
+The provenance panel records Muse Spark 1.3, response
+checks, image hash and capture details.
+
+6
+00:00:33,232 --> 00:00:38,265
+We edit the earlier AI wording and record a human decision
+with a follow-up note.
+
+7
+00:00:38,265 --> 00:00:44,139
+Saving this example to the browser lets the unified
+workspace import its genuine result.
+
+8
+00:00:44,139 --> 00:00:49,857
+The unified workspace keeps that captured report and
+photograph in one inspection record.
+
+9
+00:00:49,857 --> 00:00:54,780
+We add site context and a human summary before making a
+review decision.
+
+10
+00:00:54,780 --> 00:00:59,424
+This is the exact photograph used for the saved Muse Spark
+response.
+
+11
+00:00:59,424 --> 00:01:04,392
+We add a human observation about visible bracing without
+claiming stability.
+
+12
+00:01:04,392 --> 00:01:09,801
+Human observations and AI suggestions have separate labels
+in the findings list.
+
+13
+00:01:09,801 --> 00:01:14,919
+Now we compare the AI suggestion with the photograph and its
+stated limitation.
+
+14
+00:01:14,919 --> 00:01:20,523
+The human observation keeps its supporting evidence and
+limits beside AI suggestions.
+
+15
+00:01:20,523 --> 00:01:24,831
+Labels keep human review distinct from the model's original
+output.
+
+16
+00:01:24,831 --> 00:01:29,995
+The inspection saves to this browser profile with its photo
+and AI provenance.
+
+17
+00:01:29,995 --> 00:01:35,273
+After reopening, the edited description and review decision
+are still present.
+
+18
+00:01:35,273 --> 00:01:41,287
+The printable report brings site details, human notes, the
+photo and findings together.
+
+19
+00:01:41,287 --> 00:01:46,875
+Its AI source, review status and limitations remain readable
+in the PDF.
+
+20
+00:01:46,875 --> 00:01:53,234
+This is a previously captured result; new photographs need a
+new user-initiated analysis.
+
+21
+00:01:53,234 --> 00:01:58,727
+No segmentation masks or pixel-level localization are
+claimed in this workflow.
+
+22
+00:01:58,727 --> 00:02:05,701
+The report is preliminary visual documentation, not
+engineering certification or a safety verdict.
+
+23
+00:02:05,701 --> 00:02:12,519
+Browser-local records do not sync across devices; export a
+backup before clearing browser data.
+
+24
+00:02:12,519 --> 00:02:19,237
+SiteWitness preserves evidence for review, while qualified
+people remain responsible for decisions.

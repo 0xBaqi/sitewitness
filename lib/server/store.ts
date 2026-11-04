@@ -30,7 +30,8 @@ export class LocalStore {
     const active = row && now < row.until;
     const count = active ? row.count : 0;
     const boundary = active ? row.until : until;
-    if (count >= max) throw new ServiceError(429, "Inference usage limit reached.", Math.max(1, Math.ceil((boundary-now)/1000)));
+    const message=name.includes("-identity-")?"This network has reached today's analysis allowance. Try again after UTC midnight.":name.includes("-daily-")?"Today's shared analysis allowance is full. Try again after UTC midnight.":name==="inference-lifetime"?"This Preview's finite analysis allowance is exhausted. Contact the project owner.":"Usage limit reached. Try again later.";
+    if (count >= max) throw new ServiceError(429, message, Math.max(1, Math.ceil((boundary-now)/1000)));
     this.db.prepare("INSERT INTO counters VALUES (?, ?, ?) ON CONFLICT(name) DO UPDATE SET count=excluded.count, until=excluded.until").run(name,count+1,boundary);
   }
   consume(name: string, max: number, window: number, now: number) {
@@ -41,7 +42,8 @@ export class LocalStore {
       const active = row && now < row.until;
       const count = active ? row.count : 0;
       const until = active ? row.until : now + window;
-      if (count >= max) throw new ServiceError(429, "Usage limit reached. Try later.", Math.max(1, Math.ceil((until-now)/1000)));
+      const message=name.startsWith("analysis-burst-")?"Too many analyses from this network in a short period. Please wait before trying again.":name.startsWith("analysis-hour-")?"This network has reached its hourly analysis allowance. Try again after the wait shown.":name==="analysis-attempts"?"Analysis traffic is temporarily high. Please wait before trying again.":name==="analysis-decodes"?"The shared hourly analysis allowance is temporarily full. Try again later.":"Usage limit reached. Try again later.";
+      if (count >= max) throw new ServiceError(429, message, Math.max(1, Math.ceil((until-now)/1000)));
       this.db.prepare("INSERT INTO counters VALUES (?, ?, ?) ON CONFLICT(name) DO UPDATE SET count=excluded.count, until=excluded.until").run(name, count+1, until);
     });
   }
