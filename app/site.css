@@ -1,0 +1,80 @@
+/* Public site shell: header, landing, contact, footer. Reuses the tool's dark/lime palette. */
+.site{padding-bottom:0}
+.site-header{display:flex;align-items:center;justify-content:space-between;gap:20px;border-bottom:1px solid #27332f;padding:22px 0}
+.site-header .brand{text-decoration:none;color:inherit}
+.site-header nav{display:flex;align-items:center;gap:26px;font-size:14px}
+.site-header nav a{color:#c3cfc6;text-decoration:none;padding:8px 0}
+.site-header nav a:hover{color:#d2eb93}
+.site-header .nav-cta{background:#d2eb93;color:#182316;padding:10px 16px;border-radius:8px;font-weight:700}
+.site-header .nav-cta:hover{color:#182316;background:#e0f3ab}
+.btn{display:inline-flex;align-items:center;justify-content:center;text-decoration:none;min-height:46px;padding:0 22px;border-radius:8px;font-weight:700;font-size:15px}
+a.secondary.btn{background:#1b261b;border:1px solid #425542;color:#d8edc9}
+a.primary.btn{background:#d2eb93;color:#182316}
+.cta-row{display:flex;flex-wrap:wrap;gap:12px;margin:30px 0 22px}
+.landing-hero{display:grid;grid-template-columns:1.05fr 1fr;gap:48px;align-items:center;padding:72px 0 56px}
+.landing-hero h1{font-size:clamp(40px,5.2vw,72px);letter-spacing:-3px;line-height:1.04;margin:18px 0}
+.landing-hero h1 em,.contact-grid h1 em{font-style:normal;color:#c9e78c}
+.facts{list-style:none;padding:0;margin:0;display:flex;flex-wrap:wrap;gap:8px 22px;font:12px monospace;color:#9ebb7b}
+.facts li::before{content:"✓ ";color:#d2eb93}
+.hero-figure{margin:0;border:1px solid #344239;border-radius:14px;overflow:hidden;background:#131a18}
+.hero-figure img{display:block;width:100%;height:auto}
+.hero-figure figcaption{padding:12px 16px;font-size:12px;color:#93a498;border-top:1px solid #2b3930}
+.band{padding:64px 0;border-top:1px solid #27332f}
+.band h2{font-size:clamp(28px,3.4vw,42px);letter-spacing:-1.6px;line-height:1.1;margin:14px 0 28px;max-width:720px}
+.lead.small{font-size:16px;max-width:480px}
+.steps{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px}
+.steps li{border:1px solid #2c3933;background:#131a18;border-radius:14px;padding:22px}
+.steps h3,.findings-preview h3,.limits h3{font-size:17px;margin:10px 0 8px;letter-spacing:-.3px}
+.steps p,.findings-preview p,.faq p{font-size:14px;line-height:1.65;color:#a9b8ae;margin:0}
+.example{display:grid;grid-template-columns:1fr 1.2fr;gap:44px;align-items:start}
+.findings-preview{list-style:none;margin:0;padding:0;border:1px solid #344239;border-radius:14px;background:#131a18;overflow:hidden}
+.findings-preview li{display:flex;gap:14px;padding:18px 22px;border-bottom:1px solid #2b3930}
+.findings-preview h3{margin-top:0;font-size:15px}
+.findings-preview .review-note{display:block;background:#1b261b;border-bottom:0}
+.findings-preview .review-note strong{color:#d2eb93;font-size:13px}
+.findings-preview .review-note p{margin-top:6px}
+.textlink{display:inline-block;margin-top:22px;text-underline-offset:5px}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.limits ul{margin:0;padding-left:20px;line-height:1.8;color:#b6c4b9;font-size:15px}
+.faq{max-width:820px;border-top:1px solid #2c3933}
+.faq details{border-bottom:1px solid #2c3933;padding:18px 0}
+.faq summary{cursor:pointer;font-weight:700;font-size:16px;list-style:none;display:flex;justify-content:space-between;gap:16px}
+.faq summary::after{content:"+";color:#d2eb93;font-size:22px;line-height:1}
+.faq details[open] summary::after{content:"–"}
+.faq summary::-webkit-details-marker{display:none}
+.faq details p{margin-top:12px;max-width:680px}
+.contact-cta{display:flex;justify-content:space-between;align-items:center;gap:40px;flex-wrap:wrap}
+.contact-links{list-style:none;margin:0;padding:0;min-width:260px;border:1px solid #2c3933;border-radius:14px;background:#131a18}
+.contact-links li{display:flex;justify-content:space-between;gap:20px;padding:15px 20px;border-bottom:1px solid #2b3930;font-size:14px}
+.contact-links li:last-child{border-bottom:0}
+.contact-links span{font:11px monospace;color:#93a498;letter-spacing:1px;text-transform:uppercase;padding-top:2px}
+.contact-links a{overflow-wrap:anywhere;text-align:right}
+.contact-grid{display:grid;grid-template-columns:1fr 1fr;gap:48px;padding:64px 0 72px;align-items:start}
+.contact-grid h1{font-size:clamp(36px,4.6vw,60px);letter-spacing:-2.4px;line-height:1.05;margin:16px 0}
+.small-h{font-size:14px;color:#c9e78c;font-family:monospace;letter-spacing:1px;margin:36px 0 14px;font-weight:400}
+.contact-form label{font-size:13px;font-weight:700;display:block;margin-top:0;margin-bottom:18px}
+.contact-form input:not(.hp input),.contact-form select,.contact-form textarea{display:block;width:100%;background:#0c1210;border:1px solid #344238;border-radius:8px;padding:13px;color:#f1f4ef;margin-top:9px;font-weight:400}
+.contact-form textarea{resize:vertical;min-height:140px}
+.contact-form .primary{width:100%;justify-content:center}
+.hp{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
+.contact-sent h2{margin-top:0}
+.contact-sent p{color:#afbdaf;line-height:1.6}
+.site-footer{display:flex;justify-content:space-between;gap:32px;flex-wrap:wrap;border-top:1px solid #27332f;padding:40px 0 48px;margin-top:0;font-size:13px;line-height:1.7;color:#93a093}
+.site-footer p{margin:0 0 6px;max-width:420px}
+.site-footer .brand-line{display:flex;align-items:center;gap:10px;color:#e1eadc;font-weight:700;margin-bottom:12px}
+.site-footer .mark{padding:6px 5px;font-size:11px}
+.site-footer nav{display:flex;flex-direction:column;gap:8px}
+.site-footer nav a{text-decoration:none;color:#b6c4b9}
+.site-footer nav a:hover{color:#d2eb93}
+@media(max-width:860px){
+  .landing-hero,.example,.contact-grid,.two-col{grid-template-columns:1fr}
+  .landing-hero{padding:44px 0 36px;gap:32px}
+  .landing-hero h1{letter-spacing:-1.8px}
+  .site-header nav{gap:14px;font-size:13px}
+  .site-header nav a:not(.nav-cta):not([href="/contact"]){display:none}
+  .contact-grid{gap:32px;padding:40px 0 48px}
+  .band{padding:44px 0}
+}
+@media(max-width:480px){.site-header .nav-cta{padding:9px 12px}.cta-row .btn{width:100%}}
+html{scroll-behavior:smooth}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}

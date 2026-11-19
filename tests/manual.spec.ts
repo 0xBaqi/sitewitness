@@ -5,7 +5,7 @@ import { readFile } from "node:fs/promises";
 const title="SYNTHETIC TEST DATA: manual site visit";
 const png=()=>sharp({create:{width:40,height:30,channels:3,background:"#336688"}}).png().toBuffer();
 async function create(page:Page) {
- await page.goto("/");await page.getByRole("button",{name:"New inspection",exact:true}).click();
+ await page.goto("/inspect");await page.getByRole("button",{name:"New inspection",exact:true}).click();
  await page.getByLabel("Inspection title or question").fill(title);
 }
 async function observation(page:Page,name="Human observation one") {
@@ -98,7 +98,7 @@ test("mobile layout fits viewport and supports removing saved photos",async({pag
 test("stale-tab edits cannot overwrite a newer saved inspection",async({page,context})=>{
  await create(page);await observation(page);await page.getByRole("button",{name:"Save inspection",exact:true}).click();
  await expect(page.getByText(/Inspection saved in this browser/)).toBeVisible();
- const other=await context.newPage();await other.goto("/");await reopen(other);
+ const other=await context.newPage();await other.goto("/inspect");await reopen(other);
  await page.getByLabel("Human notes").fill("SYNTHETIC TEST DATA: first tab wins.");
  await page.getByRole("button",{name:"Save inspection",exact:true}).click();await expect(page.getByText(/Inspection saved in this browser/)).toBeVisible();
  await other.getByLabel("Human notes").fill("SYNTHETIC TEST DATA: stale edit.");
@@ -130,7 +130,7 @@ test("saved records stay in their browser profile and new visitors start with a 
  const isolated=await browser.newContext();
  try{
   await isolated.route("**/*",route=>{const url=new URL(route.request().url());return !["localhost","127.0.0.1"].includes(url.hostname)||url.pathname==="/api/analyze"?route.abort():route.continue();});
-  const visitor=await isolated.newPage();await visitor.goto("http://127.0.0.1:3107/");
+  const visitor=await isolated.newPage();await visitor.goto("http://127.0.0.1:3107/inspect");
   await expect(visitor.getByText("No inspections saved yet.", {exact:true})).toBeVisible();
   await expect(visitor.getByRole("button").filter({hasText:title})).toHaveCount(0);
  }finally{await isolated.close();}

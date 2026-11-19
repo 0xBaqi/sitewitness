@@ -55,7 +55,7 @@ export default function EvidencePage(){
   }
   const human=draft?.human,finding=captured.report.findings[selected];
   return <main className="trace-page">
-    <header className="top experience-top"><a className="brand" href="/"><span className="mark">SW</span><span>SiteWitness</span></a><nav aria-label="Workspace navigation"><a href="/#manual">Manual workspace</a><a href="#review-record">Review record</a></nav></header>
+    <header className="top experience-top"><a className="brand" href="/"><span className="mark">SW</span><span>SiteWitness</span></a><nav aria-label="Workspace navigation"><a href="/inspect">Manual workspace</a><a href="#review-record">Review record</a></nav></header>
     {!draft&&<section className="panel"><p className="eyebrow">OPTIONAL CAPTURED EXAMPLE</p><h1>Review the saved example</h1><p>This report was generated previously and is not new analysis.</p><button className="primary" type="button" onClick={()=>void openPhoto()} disabled={busy||loading}>Open labeled captured example</button></section>}
     {draft&&<><section className="review-heading"><div><p className="eyebrow">EVIDENCE TRACE / CONSTRUCTION INSPECTION</p><h1>The evidence. Your judgement.</h1></div><span className="tag">META / MUSE SPARK 1.3</span></section><p className="capture-caption"><span className="capture-dot" aria-hidden="true"/> Previously generated real Meta AI report; new live analysis disabled.</p></>}
     <div className="trace-tools" id="review-record">
@@ -90,6 +90,6 @@ export default function EvidencePage(){
       <section className="panel trace-questions" id="follow-up"><h2>Follow-up questions</h2><p className="hint">Original AI questions, audit qualifications and human answers remain separate.</p><fieldset className="manual-fields" disabled={busy}>{captured.report.unanswered_questions.map((q,i)=><div key={q}><h3>{i+1}. {q}</h3><p className="hint">AI-assisted audit: {questionAudit[i]}</p><label>Human answer / evidence for question {i+1}<textarea rows={2} maxLength={1000} value={human.answers[i]} onChange={e=>change(v=>({...v,answers:v.answers.map((answer,j)=>i===j?e.target.value:answer)}))}/></label></div>)}</fieldset></section>
       <section className="panel trace-save"><h2>Keep a reviewable record</h2><fieldset className="manual-fields" disabled={busy}><label>Reviewer name (self-declared, optional)<input value={human.reviewer} maxLength={120} onChange={e=>change(v=>({...v,reviewer:e.target.value}))}/></label></fieldset><p className="hint">Saved in this browser profile, including the photograph. Anyone using this profile can access it. This is not authenticated cloud storage or a signed engineering report. Export includes current edits, even if not saved. The private vault currently supports manual records only.</p><div className="manual-actions">{saved&&<button className="secondary" disabled={busy} onClick={()=>void remove()}>Delete saved review</button>}</div></section>
     </>}
-    <footer><span>SiteWitness / Evidence before conclusions.</span><a href="/#manual">Return to manual inspections</a></footer>
+    <footer><span>SiteWitness / Evidence before conclusions.</span><a href="/inspect">Return to manual inspections</a></footer>
   </main>;
 }

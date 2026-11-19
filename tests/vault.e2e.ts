@@ -28,7 +28,7 @@ test("real authenticated snapshot upload, account separation, restore and deleti
  page.once("dialog",d=>d.accept());await page.getByRole("button",{name:"Delete snapshot"}).click();
  expect((await deleted).status()).toBe(200);expect((await afterDelete).status()).toBe(200);
  await expect(page.getByRole("heading",{name:inspection.question})).toHaveCount(0);
- await page.goto("/");await page.getByRole("button").filter({hasText:inspection.question}).click();
+ await page.goto("/inspect");await page.getByRole("button").filter({hasText:inspection.question}).click();
  await expect(page.getByLabel("Inspection title",{exact:true})).toHaveValue(inspection.question);
  await expect(page.getByRole("img",{name:"Manual inspection photograph: test.png"})).toBeVisible();
 });
