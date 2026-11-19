@@ -12,7 +12,7 @@ test.beforeEach(async({context})=>{
 
 test("first-run workspace has no auth inputs or fixture-first report and keeps analysis user-initiated",async({page})=>{
  let analyses=0;page.on("request",req=>{if(new URL(req.url()).pathname==="/api/analyze")analyses++;});
- await page.goto("/");
+ await page.goto("/inspect");
  await expect(page.getByRole("button",{name:"New inspection"})).toBeEnabled();
  await expect(page.getByLabel(/access code|bearer token|account|invitation/i)).toHaveCount(0);
  await expect(page.getByText(/Optional example · previously generated Meta report/)).toBeVisible();
@@ -26,7 +26,7 @@ test("legacy browser reports and photographs migrate into one inspection without
  const warnings:string[]=[];page.on("console",msg=>{if(msg.type()==="warning")warnings.push(msg.text());});
  const id="6e1b2c74-c78d-4a7d-9769-93d4f1f20c73",bytes=await sharp({create:{width:40,height:30,channels:3,background:"#456789"}}).png().toBuffer();
  const legacy={id,question:`${marker}: retained legacy report`,filename:`${marker}-legacy.png`,model:"muse-spark-1.3",generatedAt:"2026-11-03T12:00:00.000Z",imageSha256:"a".repeat(64),report:{overview:`${marker}: legacy overview.`,findings:[{id:"legacy-finding",category:"observation",title:`${marker}: legacy member`,description:`${marker}: legacy original.`,evidence:`${marker}: visual evidence.`,limitation:`${marker}: uncertain.`}],unanswered_questions:[],notice:`${marker}: human review required.`},reviews:{"legacy-finding":"unreviewed"},edits:{},notes:{}};
- await page.goto("/");
+ await page.goto("/inspect");
  await page.evaluate(async({legacy,data})=>{
   localStorage.setItem("sitewitness-live-reviews-v1",JSON.stringify([legacy]));
   const db=await new Promise<IDBDatabase>((resolve,reject)=>{const req=indexedDB.open("sitewitness-photographs",1);req.onupgradeneeded=()=>req.result.createObjectStore("photos");req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);});
@@ -54,7 +54,7 @@ test("a saved captured example review is imported into the unified inspection an
  await expect(page.getByRole("button",{name:"Save review and photograph"})).toBeVisible();
  await page.getByRole("button",{name:"Save review and photograph"}).click();
  await expect(page.getByRole("status")).toContainText("Review and photograph saved");
- await page.goto("/");
+ await page.goto("/inspect");
  const item=page.getByRole("button",{name:/Human review \+ Muse Spark/});await expect(item).toBeVisible();await item.click();
  await expect(page.getByLabel("Inspection title or question")).toHaveValue("Review captured construction photograph");
  await expect(page.getByRole("img",{name:"Inspection photograph: captured-construction.jpg"})).toBeVisible();
